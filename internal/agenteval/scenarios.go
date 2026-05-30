@@ -2232,15 +2232,18 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 		},
 		RequiredCompactScopeActive:          1,
 		RequiredRuntimeCompactPrefillSource: "server_observed",
-		RequiredRuntimeSurfaceRefreshReason: "post_compaction",
-		MaxCompactScopedPressurePercent:     intPtr(0),
-		ForbiddenTools:                      []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
-		MaxParentToolCalls:                  0,
-		MaxTurns:                            2,
-		CompactTrigger:                      240,
-		ModelContextWindowTokens:            6000,
-		CompactTriggerInputPercent:          80,
-		CompactKeepLast:                     1,
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			"post_compaction":         1,
+			"compact_window_observed": 1,
+		},
+		MaxCompactScopedPressurePercent: intPtr(0),
+		ForbiddenTools:                  []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
+		MaxParentToolCalls:              0,
+		MaxTurns:                        2,
+		CompactTrigger:                  240,
+		ModelContextWindowTokens:        6000,
+		CompactTriggerInputPercent:      80,
+		CompactKeepLast:                 1,
 	}
 }
 

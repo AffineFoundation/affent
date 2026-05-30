@@ -243,6 +243,7 @@ type BatchScenario struct {
 	RequiredCompactScopeActive                     int
 	RequiredRuntimeCompactPrefillSource            string
 	RequiredRuntimeSurfaceRefreshReason            string
+	RequiredRuntimeSurfaceRefreshReasons           map[string]int
 	MaxCompactScopedPressurePercent                *int
 	RequiredContextSummaryText                     []string
 	RequiredContextLoopProtocolAnchorText          []string
@@ -536,6 +537,7 @@ type DebugScenarioExpectations struct {
 	RequiredCompactScopeActive                     int                                    `json:"required_compact_scope_active,omitempty"`
 	RequiredRuntimeCompactPrefillSource            string                                 `json:"required_runtime_compact_prefill_source,omitempty"`
 	RequiredRuntimeSurfaceRefreshReason            string                                 `json:"required_runtime_surface_refresh_reason,omitempty"`
+	RequiredRuntimeSurfaceRefreshReasons           map[string]int                         `json:"required_runtime_surface_refresh_reasons,omitempty"`
 	MaxCompactScopedPressurePercent                *int                                   `json:"max_compact_scoped_pressure_percent,omitempty"`
 	RequiredContextSummaryText                     []string                               `json:"required_context_summary_text,omitempty"`
 	RequiredContextLoopProtocolAnchorText          []string                               `json:"required_context_loop_protocol_anchor_text,omitempty"`
@@ -2405,6 +2407,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredCompactScopeActive:                     s.RequiredCompactScopeActive,
 		RequiredRuntimeCompactPrefillSource:            s.RequiredRuntimeCompactPrefillSource,
 		RequiredRuntimeSurfaceRefreshReason:            s.RequiredRuntimeSurfaceRefreshReason,
+		RequiredRuntimeSurfaceRefreshReasons:           cloneStringIntMap(s.RequiredRuntimeSurfaceRefreshReasons),
 		MaxCompactScopedPressurePercent:                cloneIntPtr(s.MaxCompactScopedPressurePercent),
 		RequiredContextSummaryText:                     append([]string(nil), s.RequiredContextSummaryText...),
 		RequiredContextLoopProtocolAnchorText:          append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
@@ -3715,6 +3718,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if strings.TrimSpace(scenario.RequiredRuntimeSurfaceRefreshReason) != "" {
 		checks = append(checks, RuntimeSurfaceRefreshReason(scenario.RequiredRuntimeSurfaceRefreshReason))
+	}
+	for _, reason := range sortedStringMapKeys(scenario.RequiredRuntimeSurfaceRefreshReasons) {
+		checks = append(checks, RuntimeSurfaceRefreshReasonAtLeast(reason, scenario.RequiredRuntimeSurfaceRefreshReasons[reason]))
 	}
 	if scenario.MaxCompactScopedPressurePercent != nil {
 		checks = append(checks, ContextCompactionScopedPressureAtMost(*scenario.MaxCompactScopedPressurePercent))

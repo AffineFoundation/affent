@@ -1295,13 +1295,25 @@ func RuntimeSurfaceCompactPrefillSource(required string) Check {
 }
 
 func RuntimeSurfaceRefreshReason(required string) Check {
+	return RuntimeSurfaceRefreshReasonAtLeast(required, 1)
+}
+
+func RuntimeSurfaceRefreshReasonAtLeast(required string, min int) Check {
 	required = strings.TrimSpace(required)
+	if min <= 0 {
+		min = 1
+	}
+	name := "runtime_surface_refresh_reason:" + required
+	if min != 1 {
+		name = fmt.Sprintf("runtime_surface_refresh_reason:%s:%d", required, min)
+	}
 	return Check{
-		Name: "runtime_surface_refresh_reason:" + required,
+		Name: name,
 		Eval: func(t Trace) CheckResult {
 			if required == "" {
 				return CheckResult{Pass: true}
 			}
+			count := 0
 			var observed []string
 			for _, surface := range t.RuntimeSurfaces {
 				reason := strings.TrimSpace(surface.RefreshReason)
@@ -1312,12 +1324,15 @@ func RuntimeSurfaceRefreshReason(required string) Check {
 					surface.EstimatedRequestInputTokens,
 				))
 				if reason == required {
-					return CheckResult{Pass: true, Detail: "refresh_reason=" + required}
+					count++
 				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("refresh_reason=%s count=%d", required, count)}
 			}
 			return CheckResult{
 				Pass:   false,
-				Detail: fmt.Sprintf("expected runtime.surface refresh_reason=%s; observed=%v", required, observed),
+				Detail: fmt.Sprintf("expected runtime.surface refresh_reason=%s count >= %d; observed_count=%d observed=%v", required, min, count, observed),
 			}
 		},
 	}

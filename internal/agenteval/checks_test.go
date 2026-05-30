@@ -1058,8 +1058,14 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceRefreshReason("post_compaction").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface refresh reason check to pass: %+v", res)
 	}
+	if res := RuntimeSurfaceRefreshReasonAtLeast("post_compaction", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected counted runtime surface refresh reason check to pass: %+v", res)
+	}
 	if res := RuntimeSurfaceRefreshReason("turn_start").Eval(trace); res.Pass || !strings.Contains(res.Detail, "post_compaction") {
 		t.Fatalf("expected runtime surface refresh reason check to fail with observed reason: %+v", res)
+	}
+	if res := RuntimeSurfaceRefreshReasonAtLeast("post_compaction", 2).Eval(trace); res.Pass || !strings.Contains(res.Detail, "observed_count=1") {
+		t.Fatalf("expected counted runtime surface refresh reason check to fail below threshold: %+v", res)
 	}
 	scopeTrace := Trace{ContextCompactionSkips: []ContextCompactionSkip{{
 		Cause:                           "request_pressure_not_reduced",

@@ -3552,18 +3552,21 @@ func TestSelectLongRunSuite(t *testing.T) {
 		modelWindowPolicy.RequiredContextCompactionReasons["estimated_context_pressure"] != 1 ||
 		modelWindowPolicy.RequiredCompactScopeActive != 1 ||
 		modelWindowPolicy.RequiredRuntimeCompactPrefillSource != "server_observed" ||
-		modelWindowPolicy.RequiredRuntimeSurfaceRefreshReason != "post_compaction" ||
+		len(modelWindowPolicy.RequiredRuntimeSurfaceRefreshReasons) != 2 ||
+		modelWindowPolicy.RequiredRuntimeSurfaceRefreshReasons["post_compaction"] != 1 ||
+		modelWindowPolicy.RequiredRuntimeSurfaceRefreshReasons["compact_window_observed"] != 1 ||
 		modelWindowPolicy.MaxCompactScopedPressurePercent == nil ||
 		*modelWindowPolicy.MaxCompactScopedPressurePercent != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 1 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 2 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 0 ||
 		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-5") {
-		t.Fatalf("model-window policy requirements = compactions:%d reasons:%#v compact_scope:%d prefill_source:%q scoped_pressure:%#v trace:%#v final:%#v",
+		t.Fatalf("model-window policy requirements = compactions:%d reasons:%#v compact_scope:%d prefill_source:%q refresh_reasons:%#v scoped_pressure:%#v trace:%#v final:%#v",
 			modelWindowPolicy.RequiredContextCompactions,
 			modelWindowPolicy.RequiredContextCompactionReasons,
 			modelWindowPolicy.RequiredCompactScopeActive,
 			modelWindowPolicy.RequiredRuntimeCompactPrefillSource,
+			modelWindowPolicy.RequiredRuntimeSurfaceRefreshReasons,
 			modelWindowPolicy.MaxCompactScopedPressurePercent,
 			modelWindowPolicy.RequiredTraceEventCounts,
 			modelWindowPolicy.RequiredFinalText,
