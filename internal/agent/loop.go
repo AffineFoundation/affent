@@ -3816,16 +3816,18 @@ func (l *Loop) requestPressureStatusForMessages(msgs []ChatMessage, toolDefs []T
 	if trigger <= 0 {
 		return status
 	}
-	if status.HardInputLimitTokens > 0 && estimated >= status.HardInputLimitTokens {
-		status.LimitReached = true
-		return status
-	}
 	if ordinal, prefill, source, ok := l.autoCompactWindowPrefillTokens(); ok && l.autoCompactWindowScopeEnabled() {
 		status.WindowOrdinal = ordinal
 		status.PrefillInputTokens = prefill
 		status.PrefillSource = source
 		status.ScopedInputTokens = max(0, estimated-prefill)
 		status.ScopedWindowActivated = true
+	}
+	if status.HardInputLimitTokens > 0 && estimated >= status.HardInputLimitTokens {
+		status.LimitReached = true
+		return status
+	}
+	if status.ScopedWindowActivated {
 		status.LimitReached = status.ScopedInputTokens >= trigger
 		return status
 	}

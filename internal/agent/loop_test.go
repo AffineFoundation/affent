@@ -2313,6 +2313,53 @@ func TestRestoreAutoCompactWindowStateSurfacesObservedScope(t *testing.T) {
 	}
 }
 
+func TestRestoredCompactWindowSurfacesAtHardInputLimit(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	maxTokens := 9_999
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("restored context ", 50)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		LLM: &LLMClient{
+			Model: "tight-output-model",
+			Sampling: SamplingDefaults{
+				MaxTokens: &maxTokens,
+			},
+		},
+		Conv:                       conv,
+		Events:                     events,
+		ModelContextWindowTokens:   10_000,
+		CompactTriggerInputPercent: 80,
+	}
+	loop.RestoreAutoCompactWindowState(AutoCompactWindowState{
+		Ordinal:            7,
+		PrefillInputTokens: 900,
+		Observed:           true,
+	})
+
+	loop.publishRuntimeSurface("turn_hard_limit_scope", TurnOptions{})
+
+	ev := <-events
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if !payload.CompactScopeActive ||
+		payload.CompactWindowOrdinal != 7 ||
+		payload.CompactWindowPrefillInputTokens != 900 ||
+		payload.CompactWindowPrefillSource != sse.CompactWindowPrefillSourceServerObserved ||
+		payload.CompactHardInputLimitTokens != 1 {
+		t.Fatalf("hard-limit compact scope surface = %+v", payload)
+	}
+}
+
 func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	reg := NewRegistry()
