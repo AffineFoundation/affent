@@ -799,6 +799,57 @@ func TestBuildDebugBriefClassifiesInputBudgetRunaway(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesRuntimeRequestPressure(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			EstimatedRequestInputTokens:      72_000,
+			CompactTriggerInputTokens:        70_000,
+			RequestInputCompactPercent:       103,
+			RequestInputTokensUntilCompact:   0,
+			CompactHardInputLimitTokens:      80_000,
+			RequestInputHardLimitPercent:     90,
+			RequestInputTokensUntilHardLimit: 8_000,
+		},
+		ContextCompactions: ContextCompactionStats{
+			Count: 1,
+		},
+		ContextCompactionSkips: ContextCompactionSkipStats{
+			Count: 1,
+		},
+	})
+	item := debugBriefItemByKind(brief, "runtime_request_pressure")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["estimated_request_input_tokens"] != 72_000 ||
+		item.Counts["compact_trigger_input_tokens"] != 70_000 ||
+		item.Counts["request_input_compact_percent"] != 103 ||
+		item.Counts["compact_hard_input_limit_tokens"] != 80_000 ||
+		item.Counts["request_input_hard_limit_percent"] != 90 ||
+		item.Counts["request_input_tokens_until_hard_limit"] != 8_000 ||
+		item.Counts["context_compactions"] != 1 ||
+		item.Counts["context_compaction_skips"] != 1 ||
+		!stringSliceContains(item.Inspect, "runtime_surface") ||
+		!stringSliceContains(item.Inspect, "task_state") ||
+		!stringSliceContains(brief.Tags, "context_pressure:compact_trigger") ||
+		!stringSliceContains(brief.Tags, "context_pressure:hard_limit") {
+		t.Fatalf("runtime request pressure item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			EstimatedRequestInputTokens:  40_000,
+			CompactTriggerInputTokens:    70_000,
+			RequestInputCompactPercent:   57,
+			CompactHardInputLimitTokens:  80_000,
+			RequestInputHardLimitPercent: 50,
+		},
+	}); clean != nil {
+		t.Fatalf("low request pressure should not emit debug brief: %+v", clean)
+	}
+}
+
 func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

@@ -206,6 +206,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if counts, ok := inputBudgetRunawayCounts(res); ok {
 		add("input_budget", "warn", "a turn exceeded the runtime-advertised input-token budget; inspect checkpoints, compaction, and repeated context before trusting long-run efficiency", []string{"loop_turn_checkpoint_examples", "runtime_surface", "context_compaction_examples", "tool_timeline", "timeline"}, counts, "input_budget", "input_budget:turn_overrun")
 	}
+	if counts, tags, ok := runtimeRequestPressureCounts(res); ok {
+		add("runtime_request_pressure", "warn", "runtime surface shows request input pressure near or over compaction limits; inspect context, tool schema, and compaction policy before raising token limits", []string{"runtime_surface", "task_state", "context_compaction_examples", "context_compaction_skip_examples", "timeline"}, counts, tags...)
+	}
 	if researchCheckpoints := loopDecisionCountByKind(res.LoopDecisionStats, "research_checkpoint"); researchCheckpoints > 0 {
 		severity := "info"
 		message := "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction"
@@ -843,6 +846,36 @@ func inputBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
 		counts["max_total_tokens"] = res.LoopTurnCheckpoints.MaxTotalTokens
 	}
 	return counts, true
+}
+
+func runtimeRequestPressureCounts(res BatchResult) (map[string]int, []string, bool) {
+	if res.RuntimeSurface == nil {
+		return nil, nil, false
+	}
+	compactPercent := res.RuntimeSurface.RequestInputCompactPercent
+	hardPercent := res.RuntimeSurface.RequestInputHardLimitPercent
+	if compactPercent < 90 && hardPercent < 90 {
+		return nil, nil, false
+	}
+	counts := map[string]int{
+		"estimated_request_input_tokens":        res.RuntimeSurface.EstimatedRequestInputTokens,
+		"compact_trigger_input_tokens":          res.RuntimeSurface.CompactTriggerInputTokens,
+		"request_input_compact_percent":         compactPercent,
+		"request_input_tokens_until_compact":    res.RuntimeSurface.RequestInputTokensUntilCompact,
+		"compact_hard_input_limit_tokens":       res.RuntimeSurface.CompactHardInputLimitTokens,
+		"request_input_hard_limit_percent":      hardPercent,
+		"request_input_tokens_until_hard_limit": res.RuntimeSurface.RequestInputTokensUntilHardLimit,
+		"context_compactions":                   res.ContextCompactions.Count,
+		"context_compaction_skips":              res.ContextCompactionSkips.Count,
+	}
+	tags := []string{"context_pressure", "context_pressure:request_input"}
+	if compactPercent >= 100 {
+		tags = append(tags, "context_pressure:compact_trigger")
+	}
+	if hardPercent >= 90 {
+		tags = append(tags, "context_pressure:hard_limit")
+	}
+	return counts, tags, true
 }
 
 func effectiveToolCallBudget(res BatchResult) int {
