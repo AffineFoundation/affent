@@ -2871,6 +2871,102 @@ func liveWebResearchCheckpointDelegatedEvidenceScenario() BatchScenario {
 	}
 }
 
+func longRunScheduledLoopTickProvenanceScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-scheduled-loop-tick-provenance",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{longRunRecoveryDomain, scheduleAutomationDomain},
+		SessionID:          "longrun-scheduled-loop-tick-provenance",
+		EnableLoopProtocol: true,
+		Prompt:             "This scheduled loop tick should continue from the active LOOP.md context and reply with LOOP-TICK-AWAKE-58 plus the current step from the loop protocol. Do not create, update, delete, close, or edit anything.",
+		PromptOptions: []PromptOptions{{
+			UserSource:      "schedule",
+			UserDisplayText: "Loop tick",
+			ScheduleID:      "sched_eval_loop_tick",
+			ScheduleKind:    agent.SessionScheduleKindLoopTick,
+		}},
+		Files: map[string]string{
+			".affent/loops/scheduled-loop-tick/LOOP.md": `# Loop Protocol: scheduled-loop-tick
+
+## 0. Metadata
+
+- loop_id: scheduled-loop-tick
+- owner_session: longrun-scheduled-loop-tick-provenance
+- status: running
+
+## 1. North Star
+
+Verify that scheduled loop ticks preserve durable loop control.
+
+## 2. Current Situation
+
+- This turn was intentionally fired by a loop_tick schedule.
+- The agent should continue from the loop state without using schedule management.
+
+## 3. Rules
+
+- Keep this loop running after the tick.
+- Do not call loop_protocol unless the loop objective is actually complete.
+
+## 4. Plan/Step Pointer
+
+Current step: report that the scheduled loop tick preserved loop context.
+
+## 5. Evidence And Recovery Index
+
+Evidence is task state schedule_kind=loop_tick, runtime loop control enabled, and loop feed trace.
+`,
+			".affent/loops/scheduled-loop-tick/state.json": `{"version":1,"loop_id":"scheduled-loop-tick","owner_session":"longrun-scheduled-loop-tick-provenance","status":"running","protocol_path":".affent/loops/scheduled-loop-tick/LOOP.md"}`,
+		},
+		RequiredUserMessageModes: map[string]int{
+			agent.UserModeNormal: 1,
+		},
+		RequiredTaskStateRequestMode:       agent.UserModeNormal,
+		RequiredTaskStateRequestSource:     "schedule",
+		RequiredTaskStateScheduleID:        "sched_eval_loop_tick",
+		RequiredTaskStateScheduleKind:      agent.SessionScheduleKindLoopTick,
+		RequiredRuntimeLoopProtocolControl: "enabled",
+		RequiredLoopProtocolFeeds:          1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "full", CurrentSituation: "intentionally fired by a loop_tick schedule"},
+		},
+		RequiredLoopProtocolFinalStatus: "running",
+		RequiredContextInjectionSources: map[string]int{
+			"schedule": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"context.injected":     1,
+			"loop.turn_checkpoint": 1,
+		},
+		ForbiddenTools: []string{
+			agent.SessionScheduleToolName,
+			agent.LoopProtocolToolName,
+			"shell",
+			"write_file",
+			"edit_file",
+		},
+		RequiredFinalText: []string{
+			"LOOP-TICK-AWAKE-58",
+			"scheduled loop tick preserved loop context",
+		},
+		ProtectedFiles: []string{".affent/loops/scheduled-loop-tick/LOOP.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.SessionScheduleToolName: 0,
+			agent.LoopProtocolToolName:    0,
+			"shell":                       0,
+			"write_file":                  0,
+			"edit_file":                   0,
+		},
+		MaxParentToolCalls:     0,
+		MaxLoopTurnInputTokens: 300000,
+		MaxLoopTurnTotalTokens: 320000,
+		MaxTurns:               4,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",

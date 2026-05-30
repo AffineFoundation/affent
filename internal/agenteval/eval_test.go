@@ -2541,8 +2541,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 38 {
-		t.Fatalf("long-run suite size = %d, want 38", len(scenarios))
+	if len(scenarios) != 39 {
+		t.Fatalf("long-run suite size = %d, want 39", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -4114,6 +4114,50 @@ func TestSelectLongRunSuite(t *testing.T) {
 	scheduledTurnCaps := ExpectationCapabilityNames(debugScenarioExpectations(scheduledTurn))
 	if !stringSliceContains(scheduledTurnCaps, "session") || !stringSliceContains(scheduledTurnCaps, "trace") {
 		t.Fatalf("scheduled turn expectation capabilities = %#v, want session and trace", scheduledTurnCaps)
+	}
+
+	scheduledLoopTick, ok := seen["longrun-scheduled-loop-tick-provenance"]
+	if !ok {
+		t.Fatalf("long-run suite missing scheduled loop tick provenance scenario")
+	}
+	if scheduledLoopTick.SessionID != "longrun-scheduled-loop-tick-provenance" ||
+		!scheduledLoopTick.EnableLoopProtocol ||
+		len(scheduledLoopTick.PromptOptions) != 1 {
+		t.Fatalf("scheduled loop tick session/options = session:%q loop:%v options:%#v",
+			scheduledLoopTick.SessionID,
+			scheduledLoopTick.EnableLoopProtocol,
+			scheduledLoopTick.PromptOptions)
+	}
+	if scheduledLoopTick.PromptOptions[0].UserSource != "schedule" ||
+		scheduledLoopTick.PromptOptions[0].ScheduleID != "sched_eval_loop_tick" ||
+		scheduledLoopTick.PromptOptions[0].ScheduleKind != agent.SessionScheduleKindLoopTick {
+		t.Fatalf("scheduled loop tick PromptOptions = %#v", scheduledLoopTick.PromptOptions)
+	}
+	if scheduledLoopTick.RequiredTaskStateRequestSource != "schedule" ||
+		scheduledLoopTick.RequiredTaskStateScheduleID != "sched_eval_loop_tick" ||
+		scheduledLoopTick.RequiredTaskStateScheduleKind != agent.SessionScheduleKindLoopTick ||
+		scheduledLoopTick.RequiredRuntimeLoopProtocolControl != "enabled" ||
+		scheduledLoopTick.RequiredLoopProtocolFeeds != 1 ||
+		scheduledLoopTick.RequiredLoopProtocolFinalStatus != "running" {
+		t.Fatalf("scheduled loop tick requirements = source:%q schedule:%q/%q control:%q feeds:%d status:%q",
+			scheduledLoopTick.RequiredTaskStateRequestSource,
+			scheduledLoopTick.RequiredTaskStateScheduleID,
+			scheduledLoopTick.RequiredTaskStateScheduleKind,
+			scheduledLoopTick.RequiredRuntimeLoopProtocolControl,
+			scheduledLoopTick.RequiredLoopProtocolFeeds,
+			scheduledLoopTick.RequiredLoopProtocolFinalStatus)
+	}
+	if !stringSliceContains(scheduledLoopTick.ForbiddenTools, agent.SessionScheduleToolName) ||
+		!stringSliceContains(scheduledLoopTick.ForbiddenTools, agent.LoopProtocolToolName) ||
+		scheduledLoopTick.MaxSuccessfulToolCallsByTool[agent.SessionScheduleToolName] != 0 ||
+		scheduledLoopTick.MaxSuccessfulToolCallsByTool[agent.LoopProtocolToolName] != 0 {
+		t.Fatalf("scheduled loop tick tool constraints = forbidden:%#v max:%#v", scheduledLoopTick.ForbiddenTools, scheduledLoopTick.MaxSuccessfulToolCallsByTool)
+	}
+	scheduledLoopTickChecks := checkNamesFor(BatchScenarioChecks(scheduledLoopTick))
+	if !stringSliceContains(scheduledLoopTickChecks, "runtime_surface_loop_protocol_control:enabled") ||
+		!stringSliceContains(scheduledLoopTickChecks, "task_state_schedule_kind:loop_tick") ||
+		!stringSliceContains(scheduledLoopTickChecks, "loop_protocol_feeds_at_least:1") {
+		t.Fatalf("scheduled loop tick checks = %#v, want loop_tick provenance checks", scheduledLoopTickChecks)
 	}
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]

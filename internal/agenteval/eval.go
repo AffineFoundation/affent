@@ -1282,6 +1282,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunSessionScheduleControlLifecycleScenario(),
 		longRunSessionScheduleLoopCoexistenceScenario(),
 		longRunScheduledTurnProvenanceScenario(),
+		longRunScheduledLoopTickProvenanceScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		memoryAutonomousDurableRuleScenario(),
 		memoryIgnoreTransientTaskStatusScenario(),
