@@ -20,12 +20,17 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 			ScheduleKind: "checkin",
 		}},
 		RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
-			TurnID:                    "turn-1",
-			ToolCount:                 3,
-			MaxTurnInputTokens:        300000,
-			ModelContextWindowTokens:  100000,
-			ReservedOutputTokens:      30000,
-			CompactTriggerInputTokens: 70000,
+			TurnID:                           "turn-1",
+			ToolCount:                        3,
+			MaxTurnInputTokens:               300000,
+			ModelContextWindowTokens:         100000,
+			ReservedOutputTokens:             30000,
+			CompactTriggerInputTokens:        70000,
+			EstimatedRequestInputTokens:      5000,
+			RequestInputCompactPercent:       7,
+			RequestInputTokensUntilCompact:   65000,
+			RequestInputHardLimitPercent:     7,
+			RequestInputTokensUntilHardLimit: 65000,
 			Workspace: &sse.RuntimeWorkspace{
 				PathMode:       "workspace_relative",
 				WorkspacePath:  "app",
@@ -101,7 +106,10 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 		t.Fatalf("evidence = %+v", got.Evidence)
 	}
 	if !taskStateHasEvidenceSummary(got, "runtime_surface", "reserved_output_tokens=30000") ||
-		!taskStateHasEvidenceSummary(got, "runtime_surface", "compact_trigger_input_tokens=70000") {
+		!taskStateHasEvidenceSummary(got, "runtime_surface", "compact_trigger_input_tokens=70000") ||
+		!taskStateHasEvidenceSummary(got, "runtime_surface", "request_input_compact_percent=7") ||
+		!taskStateHasEvidenceSummary(got, "runtime_surface", "request_input_tokens_until_compact=65000") ||
+		!taskStateHasEvidenceSummary(got, "runtime_surface", "request_input_hard_limit_percent=7") {
 		t.Fatalf("evidence = %+v, want runtime surface policy limits", got.Evidence)
 	}
 	if !taskStateHasEvidenceSummary(got, "runtime_workspace", "workspace_path=app") {

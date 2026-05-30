@@ -938,6 +938,10 @@ func RuntimeSurfaceRequestPressureSummary(p *sse.RuntimeSurfacePayload) string {
 	addIntField("tool_schema_budget_tokens", p.ToolSchemaBudgetTokens)
 	addIntField("estimated_tool_schema_tokens", p.EstimatedToolSchemaTokens)
 	addIntField("estimated_request_input_tokens", p.EstimatedRequestInputTokens)
+	addIntField("request_input_compact_percent", p.RequestInputCompactPercent)
+	addIntField("request_input_tokens_until_compact", p.RequestInputTokensUntilCompact)
+	addIntField("request_input_hard_limit_percent", p.RequestInputHardLimitPercent)
+	addIntField("request_input_tokens_until_hard_limit", p.RequestInputTokensUntilHardLimit)
 	addIntField("available_tool_count", p.AvailableToolCount)
 	addIntField("excluded_tool_count", p.ExcludedToolCount)
 	if len(fields) == 0 {

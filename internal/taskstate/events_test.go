@@ -39,6 +39,10 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 			ToolSchemaBudgetTokens:             3000,
 			EstimatedToolSchemaTokens:          2000,
 			EstimatedRequestInputTokens:        5000,
+			RequestInputCompactPercent:         7,
+			RequestInputTokensUntilCompact:     65000,
+			RequestInputHardLimitPercent:       7,
+			RequestInputTokensUntilHardLimit:   65000,
 			LoopProtocolControl: &sse.RuntimeControlScope{
 				Enabled:       false,
 				ToolAvailable: false,
@@ -137,7 +141,11 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "loop_protocol_control=disabled") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "loop_protocol_control_reason=disabled_for_turn") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "tool_schema_budget_tokens=3000") ||
-		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "estimated_tool_schema_tokens=2000") {
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "estimated_tool_schema_tokens=2000") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "request_input_compact_percent=7") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "request_input_tokens_until_compact=65000") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "request_input_hard_limit_percent=7") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "request_input_tokens_until_hard_limit=65000") {
 		t.Fatalf("evidence = %+v, want runtime surface limits", state.Evidence)
 	}
 	if !taskStateEvidenceContains(state.Evidence, "runtime_workspace", "workspace_path=app") ||
@@ -146,7 +154,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "refresh_reason=post_compaction", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "loop_protocol_control=disabled", "workspace_path=app", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "refresh_reason=post_compaction", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "loop_protocol_control=disabled", "workspace_path=app", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000", "request_input_compact_percent=7", "request_input_tokens_until_compact=65000"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}
