@@ -1366,7 +1366,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	}
 	forceNoToolsForProjectedInputBudget := func(toolDefs []ToolDef) bool {
 		budget := l.maxTurnInputTokensForTurn(opts)
-		if budget <= 0 || forceNoToolsNext {
+		if budget <= 0 || forceNoToolsNext || (totalIn <= 0 && l.Compactor != nil) {
 			return false
 		}
 		finalReserve := func() int {
@@ -1382,12 +1382,20 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			msgs = append(append([]ChatMessage(nil), msgs...), ChatMessage{Role: "user", Content: prompt})
 			return estimateRequestInputTokens(msgs, nil)
 		}
-		projected := totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs) + finalReserve()
+		nextRequestEstimate := estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+		if totalIn > 0 {
+			nextRequestEstimate = conservativeProjectedRequestInputTokens(nextRequestEstimate, budget)
+		}
+		projected := totalIn + nextRequestEstimate + finalReserve()
 		if projected < budget {
 			return false
 		}
 		if l.maybeCompactForBudgetPressure(ctx, turnID) {
-			projected = totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs) + finalReserve()
+			nextRequestEstimate = estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+			if totalIn > 0 {
+				nextRequestEstimate = conservativeProjectedRequestInputTokens(nextRequestEstimate, budget)
+			}
+			projected = totalIn + nextRequestEstimate + finalReserve()
 			if projected < budget {
 				return false
 			}
@@ -1413,10 +1421,32 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 
 		toolDefs := l.toolDefs(opts)
 		if forceNoToolsForProjectedInputBudget(toolDefs) {
-			toolDefs = nil
+			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
+				done, reason, err := runBudgetFinal(forceNoToolsPrompt, forceNoToolsReason)
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if done {
+					finishedNaturally = true
+					break
+				}
+			}
+			endReason = sse.TurnEndMaxTurns
+			break
 		}
 		if forceNoToolsNext {
-			toolDefs = nil
+			done, reason, err := runBudgetFinal(forceNoToolsPrompt, forceNoToolsReason)
+			if err != nil {
+				endReason = reason
+				break
+			}
+			if done {
+				finishedNaturally = true
+				break
+			}
+			endReason = sse.TurnEndMaxTurns
+			break
 		}
 		final, reason, err := l.runStep(ctx, turnID, toolDefs, opts)
 		if err != nil {
@@ -2704,6 +2734,16 @@ func estimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
 	return EstimateRequestInputTokens(msgs, tools)
 }
 
+func conservativeProjectedRequestInputTokens(estimated, budget int) int {
+	if estimated <= 0 {
+		return 0
+	}
+	if budget > 0 && budget < 10_000 {
+		return estimated
+	}
+	return estimated + estimated/5
+}
+
 func estimateBytesAsTokens(bytes int) int {
 	if bytes <= 0 {
 		return 0
@@ -3461,6 +3501,7 @@ var defaultToolResultLimits = map[string]int{
 	"browser_type":         2 * 1024,
 	MemoryToolName:         4 * 1024,
 	SessionSearchToolName:  4 * 1024,
+	PlanToolName:           2 * 1024,
 	"web_search":           3 * 1024,
 	"list_files":           4 * 1024,
 	"write_file":           2 * 1024,

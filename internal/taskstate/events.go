@@ -553,6 +553,12 @@ func AppendAction(items []Action, item Action, limit int) []Action {
 		return items
 	}
 	item.Summary = strings.TrimSpace(item.Summary)
+	for i := range items {
+		if strings.TrimSpace(items[i].Tool) == item.Tool && strings.TrimSpace(items[i].Summary) == item.Summary {
+			items[i] = item
+			return items
+		}
+	}
 	items = append(items, item)
 	if limit <= 0 || len(items) <= limit {
 		return items
@@ -596,12 +602,18 @@ func ActionRetentionRank(item Action) int {
 		}
 		return 50
 	}
+	switch tool {
+	case "loop_protocol":
+		return 95
+	case "session_schedule", "session_workspace":
+		return 85
+	case "plan", "memory":
+		return 80
+	}
 	if ToolEvidenceSource(tool) != "" {
 		return 80
 	}
 	switch tool {
-	case "session_workspace":
-		return 85
 	case "edit_file", "write_file":
 		return 70
 	case "file_context", "repo_search", "symbol_context", "read_file":
@@ -664,9 +676,7 @@ func appendFile(items []File, item File, limit int) []File {
 	}
 	for i := range items {
 		if items[i].Path == item.Path {
-			if item.Action != "" {
-				items[i].Action = item.Action
-			}
+			items[i].Action = mergeFileAction(items[i].Action, item.Action)
 			return items
 		}
 	}
@@ -674,6 +684,21 @@ func appendFile(items []File, item File, limit int) []File {
 		items = items[1:]
 	}
 	return append(items, item)
+}
+
+func mergeFileAction(existing, next string) string {
+	existing = strings.TrimSpace(existing)
+	next = strings.TrimSpace(next)
+	if existing == "" {
+		return next
+	}
+	if next == "" || next == existing {
+		return existing
+	}
+	if existing == "write" || next == "write" {
+		return "write"
+	}
+	return next
 }
 
 func addSource(state *EventState, source string, limit int) {

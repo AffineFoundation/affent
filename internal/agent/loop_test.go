@@ -60,6 +60,21 @@ func TestEstimateRequestInputBreaksDownConversationAndTools(t *testing.T) {
 	}
 }
 
+func TestConservativeProjectedRequestInputTokensAddsSafetyMargin(t *testing.T) {
+	if got := conservativeProjectedRequestInputTokens(0, 300_000); got != 0 {
+		t.Fatalf("zero estimate margin = %d, want 0", got)
+	}
+	if got := conservativeProjectedRequestInputTokens(100, 55); got != 100 {
+		t.Fatalf("tiny test budget margin = %d, want raw estimate 100", got)
+	}
+	if got := conservativeProjectedRequestInputTokens(100, 300_000); got != 120 {
+		t.Fatalf("small estimate margin = %d, want 120", got)
+	}
+	if got := conservativeProjectedRequestInputTokens(10_000, 300_000); got != 12_000 {
+		t.Fatalf("large estimate margin = %d, want 12000", got)
+	}
+}
+
 // newTestStore returns a FileMemoryStore wired to a temp dir with
 // tight caps suitable for loop-side tests. The internal/memory
 // package has its own copy with more knobs; this is the minimal
@@ -2313,6 +2328,7 @@ func TestLoopToolResultContextCapsByTool(t *testing.T) {
 		"browser_type":         2 * 1024,
 		MemoryToolName:         4 * 1024,
 		SessionSearchToolName:  4 * 1024,
+		PlanToolName:           2 * 1024,
 		"web_search":           3 * 1024,
 		"list_files":           4 * 1024,
 		"edit_file":            2 * 1024,

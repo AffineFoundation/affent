@@ -18,12 +18,16 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
+	var receipt planMutationReceipt
+	if err := json.Unmarshal([]byte(out), &receipt); err != nil {
 		t.Fatalf("decode set response: %v\n%s", err, out)
 	}
-	if st.Message != "plan set" || len(st.Steps) != 2 {
-		t.Fatalf("set response = %+v", st)
+	if receipt.Message != "plan set" || receipt.Label != "plan:0/2:active" || receipt.Current == nil || receipt.Current.Index != 1 {
+		t.Fatalf("set receipt = %+v", receipt)
+	}
+	st := viewPlanToolState(t, tool)
+	if len(st.Steps) != 2 {
+		t.Fatalf("set persisted steps = %+v", st)
 	}
 	if st.Steps[1].Status != "pending" {
 		t.Fatalf("default status = %q, want pending", st.Steps[1].Status)
@@ -52,6 +56,19 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 	}
 }
 
+func viewPlanToolState(t *testing.T, tool *Tool) planState {
+	t.Helper()
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode view response: %v\n%s", err, out)
+	}
+	return st
+}
+
 func TestPlanToolAutoAdvancesNextPendingStep(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
 	tool := planTool(path)
@@ -63,10 +80,14 @@ func TestPlanToolAutoAdvancesNextPendingStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
+	var receipt planMutationReceipt
+	if err := json.Unmarshal([]byte(out), &receipt); err != nil {
 		t.Fatalf("decode update response: %v\n%s", err, out)
 	}
+	if receipt.Label != "plan:1/3:active" || receipt.Current == nil || receipt.Current.Index != 2 || len(receipt.Changed) != 1 || receipt.Changed[0].Index != 1 {
+		t.Fatalf("update receipt = %+v", receipt)
+	}
+	st := viewPlanToolState(t, tool)
 	if st.Steps[0].Status != "completed" || st.Steps[1].Status != "in_progress" || st.Steps[2].Status != "pending" {
 		t.Fatalf("auto-advanced steps = %+v", st.Steps)
 	}
@@ -79,10 +100,14 @@ func TestPlanToolSetAcceptsOrdinalStepIndexLabels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
+	var receipt planMutationReceipt
+	if err := json.Unmarshal([]byte(out), &receipt); err != nil {
 		t.Fatalf("decode set response: %v\n%s", err, out)
 	}
+	if receipt.Label != "plan:0/2:active" {
+		t.Fatalf("receipt = %+v", receipt)
+	}
+	st := viewPlanToolState(t, tool)
 	if st.Steps[0].Index != 0 || st.Steps[1].Index != 0 {
 		t.Fatalf("ordinal labels should not be persisted as task state: %+v", st.Steps)
 	}
@@ -102,13 +127,14 @@ func TestPlanToolBatchUpdatesMultipleSteps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("batch update: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
+	var receipt planMutationReceipt
+	if err := json.Unmarshal([]byte(out), &receipt); err != nil {
 		t.Fatalf("decode batch update response: %v\n%s", err, out)
 	}
-	if st.Message != "updated steps 2,3,4" {
-		t.Fatalf("message = %q, want batch update message", st.Message)
+	if receipt.Message != "updated steps 2,3,4" || len(receipt.Changed) != 3 || receipt.Current == nil || receipt.Current.Index != 4 {
+		t.Fatalf("batch update receipt = %+v", receipt)
 	}
+	st := viewPlanToolState(t, tool)
 	for i, want := range []string{"completed", "completed", "completed", "in_progress"} {
 		if st.Steps[i].Status != want {
 			t.Fatalf("step %d status = %q, want %q; steps=%+v", i+1, st.Steps[i].Status, want, st.Steps)
@@ -255,14 +281,11 @@ func TestPlanToolRejectsDuplicateSteps(t *testing.T) {
 
 func TestPlanToolDeduplicatesEvidenceRefs(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
-	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[" internal/agent/plan_tool.go ","internal/agent/plan_tool.go","go test ./internal/agent","go test ./internal/agent"]}]}`))
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[" internal/agent/plan_tool.go ","internal/agent/plan_tool.go","go test ./internal/agent","go test ./internal/agent"]}]}`))
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
-		t.Fatalf("decode set response: %v\n%s", err, out)
-	}
+	st := viewPlanToolState(t, tool)
 	want := []string{"internal/agent/plan_tool.go", "go test ./internal/agent"}
 	if len(st.Steps) != 1 || len(st.Steps[0].Evidence) != len(want) {
 		t.Fatalf("evidence = %+v, want %+v", st.Steps, want)
@@ -277,14 +300,11 @@ func TestPlanToolDeduplicatesEvidenceRefs(t *testing.T) {
 func TestPlanToolEvidenceLimitCountsUniqueRefs(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
 	evidence := strings.Repeat(`"internal/agent/plan_tool.go",`, maxPlanEvidence+2) + `"go test ./internal/agent"`
-	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[`+evidence+`]}]}`))
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[`+evidence+`]}]}`))
 	if err != nil {
 		t.Fatalf("set with repeated refs: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
-		t.Fatalf("decode set response: %v\n%s", err, out)
-	}
+	st := viewPlanToolState(t, tool)
 	if got := len(st.Steps[0].Evidence); got != 2 {
 		t.Fatalf("evidence len = %d, want 2 unique refs", got)
 	}
@@ -292,25 +312,27 @@ func TestPlanToolEvidenceLimitCountsUniqueRefs(t *testing.T) {
 
 func TestPlanToolNormalizesActionAndStatusCase(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
-	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":" Set ","steps":[{"text":"ship","status":" IN_PROGRESS "}]}`))
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":" Set ","steps":[{"text":"ship","status":" IN_PROGRESS "}]}`))
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	var st planState
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
-		t.Fatalf("decode set response: %v\n%s", err, out)
-	}
+	st := viewPlanToolState(t, tool)
 	if len(st.Steps) != 1 || st.Steps[0].Status != "in_progress" {
 		t.Fatalf("steps = %+v, want normalized in_progress", st.Steps)
 	}
 
-	out, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"UPDATE","index":1,"status":" Completed "}`))
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"UPDATE","index":1,"status":" Completed "}`))
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if err := json.Unmarshal([]byte(out), &st); err != nil {
+	var receipt planMutationReceipt
+	if err := json.Unmarshal([]byte(out), &receipt); err != nil {
 		t.Fatalf("decode update response: %v\n%s", err, out)
 	}
+	if receipt.Label != "plan:1/1:done" || len(receipt.Changed) != 1 || receipt.Changed[0].Status != "completed" {
+		t.Fatalf("update receipt = %+v", receipt)
+	}
+	st = viewPlanToolState(t, tool)
 	if st.Steps[0].Status != "completed" {
 		t.Fatalf("status = %q, want completed", st.Steps[0].Status)
 	}

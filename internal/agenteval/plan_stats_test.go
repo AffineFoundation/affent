@@ -50,6 +50,26 @@ func TestTrace_PlanStats_EmptyTraceProducesZeroValue(t *testing.T) {
 	}
 }
 
+func TestTrace_PlanStats_CompactMutationReceipt(t *testing.T) {
+	tr := Trace{
+		Tools: []ToolCall{{
+			Tool:   "plan",
+			Args:   map[string]any{"action": "update", "index": float64(6), "status": "completed"},
+			Result: `{"version":1,"message":"updated step 6","label":"plan:6/6:done","total_steps":6,"completed_steps":6,"changed":[{"index":6,"text":"commit, push, verify, and close the loop","status":"completed","evidence":["git push origin main"]}],"next":"all plan steps are completed; final answer may proceed after required verification"}`,
+		}},
+	}
+
+	got := tr.PlanStats()
+	if got.Calls != 1 ||
+		got.TotalSteps != 6 ||
+		got.CompletedSteps != 6 ||
+		got.CurrentStepIndex != 0 ||
+		got.CurrentStepStatus != "" ||
+		got.CurrentStep != "" {
+		t.Fatalf("compact receipt stats = %+v, want completed 6/6 with no current step", got)
+	}
+}
+
 func TestTrace_PlanExamples(t *testing.T) {
 	tr := Trace{Tools: []ToolCall{{
 		CallID: "plan-1",
@@ -106,5 +126,38 @@ func TestTrace_PlanExamples(t *testing.T) {
 		!reflect.DeepEqual(got[2].FailureKinds, []string{"loop_guard_no_budget"}) ||
 		got[2].ResultSummary != "(max_turns reached before this tool ran) Failure: kind=loop_guard_no_budget" {
 		t.Fatalf("PlanExamples[2] = %+v", got[2])
+	}
+}
+
+func TestTrace_PlanExamples_CompactMutationReceipt(t *testing.T) {
+	tr := Trace{Tools: []ToolCall{{
+		CallID: "plan-compact",
+		Tool:   "plan",
+		Args: map[string]any{
+			"action": "update",
+			"index":  float64(6),
+			"status": "completed",
+		},
+		Result: `{"version":1,"message":"updated step 6","label":"plan:6/6:done","total_steps":6,"completed_steps":6,"changed":[{"index":6,"text":"commit, push, verify, and close the loop","status":"completed","evidence":["git push origin main"],"note":"remote verified"}],"next":"all plan steps are completed; final answer may proceed after required verification"}`,
+	}}}
+
+	got := tr.PlanExamples(2)
+	if len(got) != 1 {
+		t.Fatalf("PlanExamples len = %d, want 1: %+v", len(got), got)
+	}
+	if got[0].CallID != "plan-compact" ||
+		got[0].Action != "update" ||
+		got[0].Index != 6 ||
+		got[0].Status != "completed" ||
+		got[0].StepText != "commit, push, verify, and close the loop" ||
+		got[0].TotalSteps != 6 ||
+		got[0].CompletedSteps != 6 ||
+		got[0].CurrentStepIndex != 0 ||
+		got[0].CurrentStepStatus != "" ||
+		got[0].CurrentStep != "" ||
+		!reflect.DeepEqual(got[0].Evidence, []string{"git push origin main"}) ||
+		got[0].NotePreview != "remote verified" ||
+		got[0].ResultMessage != "updated step 6" {
+		t.Fatalf("PlanExamples[0] compact receipt = %+v", got[0])
 	}
 }

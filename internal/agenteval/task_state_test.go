@@ -181,6 +181,44 @@ func TestDeriveTaskStatePreservesDistinctActionAndEvidenceSourcesAtLimit(t *test
 	}
 }
 
+func TestDeriveTaskStatePreservesDurableControlActionsAtLimit(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Finish a long-running project loop.",
+		TurnEndReason: "completed",
+		Tools: []ToolCall{
+			{TurnID: "turn-1", CallID: "test-1", Tool: "shell", Args: map[string]any{"command": "python3 -m unittest discover -s tests"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "test-2", Tool: "shell", Args: map[string]any{"command": "python3 -m unittest discover -s tests"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "test-3", Tool: "shell", Args: map[string]any{"command": "python3 -m unittest discover -s tests 2>&1"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "status-1", Tool: "shell", Args: map[string]any{"command": "git status"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "commit", Tool: "shell", Args: map[string]any{"command": `git commit -m "feat"`}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "push", Tool: "shell", Args: map[string]any{"command": "git push origin main"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "status-2", Tool: "shell", Args: map[string]any{"command": "git status"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "plan", Tool: "plan", Args: map[string]any{"action": "update"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "loop-close", Tool: "loop_protocol", Args: map[string]any{"action": "close", "status": "completed"}, ExitCode: 0},
+		},
+	}
+
+	got := DeriveTaskState(trace)
+	if !taskStateHasAttemptedAction(got, "loop_protocol", "close") {
+		t.Fatalf("attempted actions = %+v, want loop_protocol close preserved", got.AttemptedActions)
+	}
+	if !taskStateHasAttemptedAction(got, "shell", "git push") {
+		t.Fatalf("attempted actions = %+v, want git push preserved", got.AttemptedActions)
+	}
+}
+
+func TestDeriveTaskStateKeepsWriteAfterLaterEdit(t *testing.T) {
+	got := DeriveTaskState(Trace{
+		Tools: []ToolCall{
+			{Tool: "write_file", Args: map[string]any{"path": "tests/test_store.py"}},
+			{Tool: "edit_file", Args: map[string]any{"path": "tests/test_store.py"}},
+		},
+	})
+	if !reflect.DeepEqual(got.ChangedFiles, []TaskStateFile{{Path: "tests/test_store.py", Action: "write"}}) {
+		t.Fatalf("changed files = %+v, want write preserved after later edit", got.ChangedFiles)
+	}
+}
+
 func TestDeriveTaskStateKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
 	got := DeriveTaskState(Trace{
 		Prompt:        "Build a release notes generator.",

@@ -1661,6 +1661,18 @@ func TestFinalPlanCompleted(t *testing.T) {
 		t.Fatalf("expected completed plan to pass: %+v", res)
 	}
 
+	compactReceiptTrace := Trace{Tools: []ToolCall{
+		{
+			CallID: "c1",
+			Tool:   "plan",
+			Args:   map[string]any{"action": "update"},
+			Result: `{"version":1,"message":"updated step 2","label":"plan:2/2:done","total_steps":2,"completed_steps":2,"changed":[{"index":2,"text":"ship","status":"completed"}]}`,
+		},
+	}}
+	if res := FinalPlanCompleted().Eval(compactReceiptTrace); !res.Pass {
+		t.Fatalf("expected compact completed receipt to pass: %+v", res)
+	}
+
 	pendingTrace := Trace{Tools: []ToolCall{
 		{
 			CallID: "c1",

@@ -39,7 +39,7 @@ var defaultForbiddenCommands = []string{
 }
 
 const (
-	localBareRemoteSetupCommand   = "git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && printf '\\n.affentctl/\\n.affent/memory/\\n.affent/artifacts/\\n.affent/loops/*/events.jsonl\\n.affent/loops/*/state.json\\ntrace.jsonl\\naffenteval-*.json\\naffenteval-*.txt\\naffenteval-*.md\\n__pycache__/\\n**/__pycache__/\\n' >> .git/info/exclude && git add . && git commit -m initial && git init --bare .git/affent-eval-remote.git && git remote add origin .git/affent-eval-remote.git && git push -u origin main"
+	localBareRemoteSetupCommand   = "git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && printf '\\n.affentctl/\\n.affent/memory/\\n.affent/artifacts/\\n.affent/loops/*/LOOP.md\\n.affent/loops/*/events.jsonl\\n.affent/loops/*/state.json\\ntrace.jsonl\\naffenteval-*.json\\naffenteval-*.txt\\naffenteval-*.md\\n__pycache__/\\n**/__pycache__/\\n' >> .git/info/exclude && git add . && git commit -m initial && git init --bare .git/affent-eval-remote.git && git remote add origin .git/affent-eval-remote.git && git push -u origin main"
 	pythonUnittestDiscoverCommand = "python3 -m unittest discover -s tests"
 )
 
@@ -3591,7 +3591,11 @@ func longRunScratchProjectLoopPushScenario() BatchScenario {
 		Domains:            []string{codePRDomain, longRunRecoveryDomain},
 		SessionID:          "scratch-project-loop",
 		EnableLoopProtocol: true,
-		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state and the plan tool to track the work through completion. Create stdlib unittest coverage in tests/test_store.py before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items through open_items(). Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, complete every plan step, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
+		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state and the plan tool to track the work through completion. Create stdlib unittest coverage in tests/test_store.py before the implementation. Use exactly `python3 -m unittest discover -s tests` for both required test runs: run it once after creating tests and before creating todo_core/store.py, then fix the expected failure by creating a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items through open_items(), then run the same command again after implementation. Update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, complete every plan step, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the exact test command, the created files, the commit hash, and the push result.",
+		Prompts: []string{
+			"Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state and the plan tool to track the work through completion. Create stdlib unittest coverage in tests/test_store.py before the implementation. Use exactly `python3 -m unittest discover -s tests` for both required test runs: run it once after creating tests and before creating todo_core/store.py, then fix the expected failure by creating a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items through open_items(), then run the same command again after implementation. Update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. If the turn reaches a budget boundary before commit/push/close, preserve the current plan state and stop compactly so the next turn can continue.",
+			"Continue the same scratch project loop from the persisted plan, files, and LOOP.md. Do not restart completed work. Finish any remaining README, verification, git commit, git push, clean-status check, plan completion, and loop_protocol close work. Use exactly `python3 -m unittest discover -s tests` for verification if another test run is needed. The final answer must include SCRATCH-LOOP-31, the exact test command, the created files, the commit hash, and the push result.",
+		},
 		Files: map[string]string{
 			".affent/loops/scratch-project-loop/LOOP.md": `# Loop Protocol: scratch-project-loop
 
@@ -3615,6 +3619,8 @@ Build a tiny but complete software project from a nearly empty repository, keep 
 ## 3. Rules
 
 - Use Python stdlib unittest; do not add third-party dependencies.
+- Use exactly python3 -m unittest discover -s tests for verification.
+- Create tests/test_store.py and run that command before creating todo_core/store.py.
 - Keep generated files focused: todo_core/, tests/test_store.py, and README.md are enough.
 - Do not modify this LOOP.md except by closing it through the loop_protocol tool after the project is complete.
 
@@ -3665,7 +3671,6 @@ This repository starts almost empty. The agent must create the project, tests, d
 			{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
-			{Command: `python3 -m unittest`, Tool: "write_file"},
 			{Command: `git status`, Tool: "write_file"},
 			{Command: `git commit`, Tool: "write_file"},
 			{Command: `git push`, Tool: "write_file"},
@@ -3713,7 +3718,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 			pythonUnittestDiscoverCommand,
 			"todo_core/store.py",
 			"tests/test_store.py",
-			"status",
+			"clean",
 			"commit",
 			"push",
 		},
@@ -3741,7 +3746,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 		ForbidWorkspaceAbsolutePaths: true,
 		MaxLoopTurnInputTokens:       300000,
 		MaxLoopTurnTotalTokens:       320000,
-		MaxTurns:                     20,
+		MaxTurns:                     28,
 	}
 }
 

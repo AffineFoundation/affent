@@ -284,6 +284,7 @@ func TestScanEventsPreservesDistinctAttemptedActionToolsAtLimit(t *testing.T) {
 		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
 		{Tool: "shell", Args: map[string]any{"command": `git commit -m "fix"`}},
 		{Tool: "shell", Args: map[string]any{"command": "git push origin main"}},
+		{Tool: "loop_protocol", Args: map[string]any{"action": "close", "status": "completed"}},
 		{Tool: "shell", Args: map[string]any{"command": "git status --short"}},
 	} {
 		callID := "tool-" + string(rune('a'+i))
@@ -309,6 +310,9 @@ func TestScanEventsPreservesDistinctAttemptedActionToolsAtLimit(t *testing.T) {
 	}
 	if !taskStateActionContains(state.AttemptedActions, "shell", "git push") {
 		t.Fatalf("attempted actions = %+v, want git push preserved", state.AttemptedActions)
+	}
+	if !taskStateActionContains(state.AttemptedActions, "loop_protocol", "close") {
+		t.Fatalf("attempted actions = %+v, want loop_protocol close preserved", state.AttemptedActions)
 	}
 }
 
@@ -361,6 +365,28 @@ func TestAppendActionRetentionKeepsHandoffOverRecentLowValueAction(t *testing.T)
 	}
 	if taskStateActionContains(got, "list_files", "docs") {
 		t.Fatalf("actions = %+v, low-value overflow action should not displace stronger anchors", got)
+	}
+}
+
+func TestAppendActionCompactsDuplicateActions(t *testing.T) {
+	actions := []Action{
+		{Tool: "shell", Summary: "go test ./...", CallID: "old"},
+		{Tool: "shell", Summary: "git status --short", CallID: "status"},
+	}
+	got := AppendAction(actions, Action{Tool: "shell", Summary: "go test ./...", CallID: "new"}, DefaultMaxItems)
+	if len(got) != 2 {
+		t.Fatalf("actions len = %d, want duplicate compacted to 2: %+v", len(got), got)
+	}
+	if got[0].CallID != "new" {
+		t.Fatalf("duplicate action = %+v, want latest call id retained", got[0])
+	}
+}
+
+func TestAppendFileKeepsWriteAfterLaterEdit(t *testing.T) {
+	files := appendFile(nil, File{Path: "tests/test_store.py", Action: "write"}, DefaultMaxItems)
+	files = appendFile(files, File{Path: "tests/test_store.py", Action: "edit"}, DefaultMaxItems)
+	if len(files) != 1 || files[0].Action != "write" {
+		t.Fatalf("files = %+v, want write preserved after later edit", files)
 	}
 }
 

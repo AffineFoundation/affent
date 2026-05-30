@@ -2,6 +2,7 @@ package agenteval
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/agent"
@@ -48,7 +49,7 @@ func (t Trace) PlanStats() PlanStats {
 		if c.IsErr || c.ExitCode != 0 || strings.TrimSpace(c.Result) == "" {
 			continue
 		}
-		if summary, err := planstate.SummarizeJSON(json.RawMessage(c.Result)); err == nil {
+		if summary, err := summarizePlanToolResult(c.Result); err == nil {
 			s.TotalSteps = summary.TotalSteps
 			s.CompletedSteps = summary.CompletedSteps
 			s.CurrentStepIndex = summary.CurrentStepIndex
@@ -132,12 +133,12 @@ func planExampleForTool(index int, c ToolCall) PlanExample {
 		ex.ResultSummary = compactOneLine(c.Result, 240)
 		return ex
 	}
-	var st evalPlanState
+	var st evalPlanResult
 	if err := json.Unmarshal([]byte(c.Result), &st); err != nil {
 		return ex
 	}
 	ex.ResultMessage = compactOneLine(st.Message, 220)
-	if summary, err := planstate.SummarizeJSON(json.RawMessage(c.Result)); err == nil {
+	if summary, err := summarizePlanToolResult(c.Result); err == nil {
 		ex.TotalSteps = summary.TotalSteps
 		ex.CompletedSteps = summary.CompletedSteps
 		ex.CurrentStepIndex = summary.CurrentStepIndex
@@ -174,19 +175,89 @@ func planCallSkippedBeforeExecution(c ToolCall) bool {
 	return containsString(toolFailureKindsForCall(c), "loop_guard_no_budget")
 }
 
-type evalPlanState struct {
-	Message string         `json:"message"`
-	Steps   []evalPlanStep `json:"steps"`
+type evalPlanResult struct {
+	Message        string         `json:"message"`
+	Label          string         `json:"label"`
+	TotalSteps     int            `json:"total_steps"`
+	CompletedSteps int            `json:"completed_steps"`
+	Current        *evalPlanStep  `json:"current"`
+	Changed        []evalPlanStep `json:"changed"`
+	Steps          []evalPlanStep `json:"steps"`
 }
 
 type evalPlanStep struct {
+	Index    int      `json:"index"`
 	Text     string   `json:"text"`
 	Status   string   `json:"status"`
 	Evidence []string `json:"evidence"`
 	Note     string   `json:"note"`
 }
 
-func planExampleResultStep(st evalPlanState, action string, index int) (evalPlanStep, bool) {
+func summarizePlanToolResult(result string) (planstate.Summary, error) {
+	raw := json.RawMessage(result)
+	var st evalPlanResult
+	if err := json.Unmarshal(raw, &st); err != nil {
+		return planstate.Summary{}, err
+	}
+	if len(st.Steps) > 0 {
+		return planstate.SummarizeJSON(raw)
+	}
+	if st.TotalSteps == 0 && st.CompletedSteps == 0 && strings.TrimSpace(st.Label) == "" && st.Current == nil {
+		return planstate.SummarizeJSON(raw)
+	}
+	return summarizePlanReceipt(st), nil
+}
+
+func summarizePlanReceipt(st evalPlanResult) planstate.Summary {
+	out := planstate.Summary{
+		Label:          strings.TrimSpace(st.Label),
+		TotalSteps:     st.TotalSteps,
+		CompletedSteps: st.CompletedSteps,
+	}
+	if out.Label == "" {
+		out.Label = fmt.Sprintf("plan:%d/%d", out.CompletedSteps, out.TotalSteps)
+		if out.TotalSteps > 0 && out.CompletedSteps == out.TotalSteps {
+			out.Label += ":done"
+		}
+	}
+	if st.Current != nil {
+		status := strings.ToLower(strings.TrimSpace(st.Current.Status))
+		out.CurrentStepIndex = st.Current.Index
+		out.CurrentStepStatus = status
+		out.CurrentStep = compactOneLine(st.Current.Text, 220)
+		switch status {
+		case "in_progress":
+			out.Active = true
+		case "blocked":
+			out.Blocked = true
+			out.BlockedStepIndex = st.Current.Index
+			out.BlockedStep = compactOneLine(st.Current.Text, 220)
+		}
+	}
+	if out.TotalSteps > 0 && out.CompletedSteps == out.TotalSteps {
+		out.Done = true
+	}
+	if strings.Contains(out.Label, ":done") {
+		out.Done = true
+	}
+	if strings.Contains(out.Label, ":active") {
+		out.Active = true
+	}
+	if strings.Contains(out.Label, ":blocked") {
+		out.Blocked = true
+	}
+	return out
+}
+
+func planExampleResultStep(st evalPlanResult, action string, index int) (evalPlanStep, bool) {
+	for _, step := range st.Changed {
+		if index > 0 && step.Index == index {
+			return step, true
+		}
+	}
+	if st.Current != nil && (index == 0 || st.Current.Index == index) {
+		return *st.Current, true
+	}
 	if len(st.Steps) == 0 {
 		return evalPlanStep{}, false
 	}

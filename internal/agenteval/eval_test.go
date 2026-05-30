@@ -2489,6 +2489,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!strings.Contains(commitPush.SetupCommands[0], "git init") ||
 		!strings.Contains(commitPush.SetupCommands[0], ".git/info/exclude") ||
 		!strings.Contains(commitPush.SetupCommands[0], ".affentctl/") ||
+		!strings.Contains(commitPush.SetupCommands[0], ".affent/loops/*/LOOP.md") ||
 		!strings.Contains(commitPush.SetupCommands[0], "git init --bare .git/affent-eval-remote.git") ||
 		!strings.Contains(commitPush.SetupCommands[0], "git push -u origin main") {
 		t.Fatalf("commit/push SetupCommands = %#v, want isolated local bare remote initialization and runtime artifact excludes", commitPush.SetupCommands)
@@ -2744,8 +2745,21 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if scratchProject.RequiredLoopProtocolFinalStatus != "completed" {
 		t.Fatalf("scratch project RequiredLoopProtocolFinalStatus = %q, want completed", scratchProject.RequiredLoopProtocolFinalStatus)
 	}
+	if !strings.Contains(scratchProject.Prompt, "Use exactly `python3 -m unittest discover -s tests`") ||
+		!strings.Contains(scratchProject.Prompt, "before creating todo_core/store.py") ||
+		!strings.Contains(scratchProject.Files[".affent/loops/scratch-project-loop/LOOP.md"], "Use exactly python3 -m unittest discover -s tests") {
+		t.Fatalf("scratch project prompt/LOOP.md should require exact unittest command before implementation")
+	}
+	if len(scratchProject.Prompts) != 2 ||
+		!strings.Contains(scratchProject.Prompts[0], "budget boundary") ||
+		!strings.Contains(scratchProject.Prompts[1], "Continue the same scratch project loop") {
+		t.Fatalf("scratch project should exercise multi-turn long-run recovery, prompts=%#v", scratchProject.Prompts)
+	}
 	if !scratchProject.RequireNoPlanErrors || !scratchProject.RequireFinalPlanCompleted {
 		t.Fatalf("scratch project plan closure flags = no_errors:%v final_completed:%v, want both true", scratchProject.RequireNoPlanErrors, scratchProject.RequireFinalPlanCompleted)
+	}
+	if scratchProject.MaxTurns < 28 {
+		t.Fatalf("scratch project MaxTurns = %d, want enough budget for plan, loop close, commit, push, and final verification", scratchProject.MaxTurns)
 	}
 	if !reflect.DeepEqual(scratchProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running", agent.WorkspaceVerificationFreshnessGuardLabel}) {
 		t.Fatalf("scratch project RequiredCompletionGuards = %#v", scratchProject.RequiredCompletionGuards)
@@ -2759,8 +2773,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if scratchProject.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 {
 		t.Fatalf("scratch project trace event requirements = %#v, want loop.turn_checkpoint=1", scratchProject.RequiredTraceEventCounts)
 	}
-	if !stringSliceContains(scratchProject.RequiredFinalText, "status") {
-		t.Fatalf("scratch project RequiredFinalText = %#v, want status", scratchProject.RequiredFinalText)
+	if !stringSliceContains(scratchProject.RequiredFinalText, "clean") {
+		t.Fatalf("scratch project RequiredFinalText = %#v, want clean-state final evidence", scratchProject.RequiredFinalText)
 	}
 	if !stringSliceContains(scratchProject.ProtectedFiles, ".affent/loops/scratch-project-loop/LOOP.md") {
 		t.Fatalf("scratch project ProtectedFiles = %#v, want LOOP.md", scratchProject.ProtectedFiles)

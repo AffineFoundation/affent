@@ -67,6 +67,25 @@ type planStep struct {
 	Note     string   `json:"note,omitempty"`
 }
 
+type planMutationReceipt struct {
+	Version        int               `json:"version"`
+	Message        string            `json:"message,omitempty"`
+	Label          string            `json:"label,omitempty"`
+	TotalSteps     int               `json:"total_steps,omitempty"`
+	CompletedSteps int               `json:"completed_steps,omitempty"`
+	Current        *planReceiptStep  `json:"current,omitempty"`
+	Changed        []planReceiptStep `json:"changed,omitempty"`
+	Next           string            `json:"next,omitempty"`
+}
+
+type planReceiptStep struct {
+	Index    int      `json:"index"`
+	Text     string   `json:"text"`
+	Status   string   `json:"status"`
+	Evidence []string `json:"evidence,omitempty"`
+	Note     string   `json:"note,omitempty"`
+}
+
 func planTool(path string) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
@@ -135,7 +154,7 @@ func planTool(path string) *Tool {
 				if err := writePlanState(path, st); err != nil {
 					return "", err
 				}
-				return marshalPlanState(st)
+				return marshalPlanMutationReceipt(st, nil)
 			case "update":
 				st, err := readPlanState(path)
 				if err != nil {
@@ -161,12 +180,12 @@ func planTool(path string) *Tool {
 				if err := writePlanState(path, st); err != nil {
 					return "", err
 				}
-				return marshalPlanState(st)
+				return marshalPlanMutationReceipt(st, updated)
 			case "clear":
 				if err := clearPlanState(path); err != nil {
 					return "", err
 				}
-				return marshalPlanState(newPlanState(nil, "plan cleared"))
+				return marshalPlanMutationReceipt(newPlanState(nil, "plan cleared"), nil)
 			default:
 				return "", fmt.Errorf("unknown action %q\nNext: retry with action=view, action=set, action=update, or action=clear", action)
 			}
@@ -671,6 +690,82 @@ func marshalPlanState(st planState) (string, error) {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+func marshalPlanMutationReceipt(st planState, changedIndexes []int) (string, error) {
+	receipt := compactPlanMutationReceipt(st, changedIndexes)
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func compactPlanMutationReceipt(st planState, changedIndexes []int) planMutationReceipt {
+	receipt := planMutationReceipt{
+		Version:        planStateVersion,
+		Message:        st.Message,
+		Label:          activePlanStatusLabel(st.Steps),
+		TotalSteps:     len(st.Steps),
+		CompletedSteps: completedPlanStepCount(st.Steps),
+	}
+	if current := activePlanCurrentStepIndex(st.Steps); current > 0 {
+		step := planStepReceipt(current, st.Steps[current-1])
+		receipt.Current = &step
+		receipt.Next = fmt.Sprintf("continue from step %d; call plan action=view only if the full plan is needed", current)
+	} else if len(st.Steps) == 0 {
+		receipt.Next = "no active plan"
+	} else {
+		receipt.Next = "all plan steps are completed; final answer may proceed after required verification"
+	}
+	if len(changedIndexes) > 0 {
+		receipt.Changed = make([]planReceiptStep, 0, len(changedIndexes))
+		for _, index := range changedIndexes {
+			if index < 1 || index > len(st.Steps) {
+				continue
+			}
+			receipt.Changed = append(receipt.Changed, planStepReceipt(index, st.Steps[index-1]))
+		}
+	}
+	return receipt
+}
+
+func completedPlanStepCount(steps []planStep) int {
+	completed := 0
+	for _, step := range steps {
+		if planStepCompleted(step) {
+			completed++
+		}
+	}
+	return completed
+}
+
+func planStepReceipt(index int, step planStep) planReceiptStep {
+	return planReceiptStep{
+		Index:    index,
+		Text:     textutil.Preview(textutil.CompactWhitespace(step.Text), maxActivePlanStepTextBytes),
+		Status:   strings.TrimSpace(step.Status),
+		Evidence: compactPlanReceiptEvidence(step.Evidence),
+		Note:     textutil.Preview(textutil.CompactWhitespace(step.Note), maxActivePlanNoteBytes),
+	}
+}
+
+func compactPlanReceiptEvidence(evidence []string) []string {
+	if len(evidence) == 0 {
+		return nil
+	}
+	limit := len(evidence)
+	if limit > maxActivePlanEvidenceRefs {
+		limit = maxActivePlanEvidenceRefs
+	}
+	out := make([]string, 0, limit)
+	for _, ev := range evidence[:limit] {
+		ev = textutil.Preview(textutil.CompactWhitespace(ev), maxActivePlanEvidenceRefBytes)
+		if ev != "" {
+			out = append(out, ev)
+		}
+	}
+	return out
 }
 
 const planSystemGuidanceMarker = "Affent plan tool guidance:"

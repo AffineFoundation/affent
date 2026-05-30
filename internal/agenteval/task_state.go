@@ -347,9 +347,7 @@ func appendTaskFile(items []TaskStateFile, item TaskStateFile) []TaskStateFile {
 	}
 	for i := range items {
 		if items[i].Path == item.Path {
-			if item.Action != "" {
-				items[i].Action = item.Action
-			}
+			items[i].Action = mergeTaskFileAction(items[i].Action, item.Action)
 			return items
 		}
 	}
@@ -357,6 +355,21 @@ func appendTaskFile(items []TaskStateFile, item TaskStateFile) []TaskStateFile {
 		items = items[1:]
 	}
 	return append(items, item)
+}
+
+func mergeTaskFileAction(existing, next string) string {
+	existing = strings.TrimSpace(existing)
+	next = strings.TrimSpace(next)
+	if existing == "" {
+		return next
+	}
+	if next == "" || next == existing {
+		return existing
+	}
+	if existing == "write" || next == "write" {
+		return "write"
+	}
+	return next
 }
 
 func appendTaskFailure(items []TaskStateFailure, item TaskStateFailure) []TaskStateFailure {
