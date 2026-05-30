@@ -3006,7 +3006,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !reflect.DeepEqual(integrated.RequiredCompletionGuards, []string{"active_plan_unfinished"}) {
 		t.Fatalf("integrated memory recovery RequiredCompletionGuards = %#v", integrated.RequiredCompletionGuards)
 	}
-	if len(integrated.Prompts) != 2 || integrated.Prompt != "" {
+	if len(integrated.Prompts) != 3 || integrated.Prompt != "" {
 		t.Fatalf("integrated memory recovery prompts = prompt:%q prompts:%d", integrated.Prompt, len(integrated.Prompts))
 	}
 	for _, prompt := range integrated.Prompts {
@@ -3038,6 +3038,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 		{Tool: "memory", Arg: "action", Substring: "search"},
 		{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
 		{Tool: "read_file", Arg: "path", Substring: "docs/conventions.md"},
+		{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+		{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
 	} {
 		if !toolArgRequirementContains(integrated.RequiredToolArgContains, want) {
 			t.Fatalf("integrated memory recovery RequiredToolArgContains = %#v, want %#v", integrated.RequiredToolArgContains, want)
@@ -3063,12 +3065,22 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!integrated.RequiredSessionSearch[0].ContextIncluded {
 		t.Fatalf("integrated memory recovery RequiredSessionSearch = %#v", integrated.RequiredSessionSearch)
 	}
-	for _, want := range []string{"AUTO-MEM-64", "JSON", "--summary", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
+	for _, want := range []string{"AUTO-MEM-64", "JSON", "--summary", `test "$(git rev-list --count HEAD)" -eq 3`, "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(integrated.VerifyCommand, want) {
 			t.Fatalf("integrated memory recovery VerifyCommand = %q, want %q", integrated.VerifyCommand, want)
 		}
 	}
-	if integrated.RequiredLoopProtocolFeeds != 2 ||
+	if !stringSliceContains(integrated.ForbiddenFinalText, "--verbose") {
+		t.Fatalf("integrated memory recovery ForbiddenFinalText = %#v, want --verbose", integrated.ForbiddenFinalText)
+	}
+	if stringSliceContains(integrated.RequiredFinalText, pythonUnittestDiscoverCommand) {
+		t.Fatalf("integrated memory recovery should require the unittest command through command/verifier evidence, not final text: %#v", integrated.RequiredFinalText)
+	}
+	if !stringSliceContains(integrated.ForbiddenFileSubstrings["reporter/cli.py"], "--verbose") ||
+		!stringSliceContains(integrated.ForbiddenFileSubstrings["tests/test_cli.py"], "verbose") {
+		t.Fatalf("integrated memory recovery ForbiddenFileSubstrings = %#v, want verbose drift guard", integrated.ForbiddenFileSubstrings)
+	}
+	if integrated.RequiredLoopProtocolFeeds != 3 ||
 		integrated.RequiredLoopProtocolFeedModes["full"] != 1 ||
 		integrated.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(integrated.RequiredLoopProtocolFeedMatches) != 1 ||
@@ -3076,13 +3088,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!strings.Contains(integrated.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "fix JSON mode") {
 		t.Fatalf("integrated memory recovery loop protocol constraints = feeds:%d modes:%#v matches:%#v", integrated.RequiredLoopProtocolFeeds, integrated.RequiredLoopProtocolFeedModes, integrated.RequiredLoopProtocolFeedMatches)
 	}
-	if integrated.RequiredTraceEventCounts["loop.turn_checkpoint"] != 2 {
-		t.Fatalf("integrated memory recovery trace event requirements = %#v, want loop.turn_checkpoint=2", integrated.RequiredTraceEventCounts)
+	if integrated.RequiredTraceEventCounts["loop.turn_checkpoint"] != 3 {
+		t.Fatalf("integrated memory recovery trace event requirements = %#v, want loop.turn_checkpoint=3", integrated.RequiredTraceEventCounts)
 	}
-	for _, want := range []string{".affent/loops/integrated-memory-recovery/LOOP.md", "docs/conventions.md"} {
-		if !stringSliceContains(integrated.ProtectedFiles, want) {
-			t.Fatalf("integrated memory recovery ProtectedFiles = %#v, want %q", integrated.ProtectedFiles, want)
-		}
+	if integrated.RequiredLoopProtocolFinalStatus != "completed" {
+		t.Fatalf("integrated memory recovery RequiredLoopProtocolFinalStatus = %q, want completed", integrated.RequiredLoopProtocolFinalStatus)
+	}
+	if !stringSliceContains(integrated.ProtectedFiles, "docs/conventions.md") ||
+		stringSliceContains(integrated.ProtectedFiles, ".affent/loops/integrated-memory-recovery/LOOP.md") {
+		t.Fatalf("integrated memory recovery ProtectedFiles = %#v, want docs protected and LOOP.md managed by loop_protocol", integrated.ProtectedFiles)
 	}
 	integratedCaps := ScenarioExpectationCapabilityNames(integrated)
 	for _, want := range []string{"loop_protocol", "memory", "session_search", "plan", "session", "skill", "trace", "workspace", "verifier"} {

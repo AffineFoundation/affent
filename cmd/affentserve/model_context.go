@@ -20,7 +20,7 @@ func resolveModelContextWindowFromProvider(cfg Config, logger zerolog.Logger) Co
 
 	llm := agent.NewLLMClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
 	llm.HTTP = &http.Client{Timeout: modelContextMetadataTimeout}
-	meta, err := llm.FetchModelMetadata(ctx)
+	meta, source, err := llm.ResolveModelMetadata(ctx)
 	if err != nil {
 		logger.Debug().Err(err).Str("model", cfg.Model).Msg("model context window metadata unavailable")
 		return cfg
@@ -38,9 +38,10 @@ func resolveModelContextWindowFromProvider(cfg Config, logger zerolog.Logger) Co
 	logger.Info().
 		Str("model", cfg.Model).
 		Str("metadata_model", meta.ID).
+		Str("metadata_source", source).
 		Int("model_context_window_tokens", cfg.ModelContextWindowTokens).
 		Int("effective_context_window_percent", meta.EffectiveContextWindowPercent).
 		Int("auto_compact_token_limit", cfg.CompactTriggerInputTokens).
-		Msg("model context window resolved from provider metadata")
+		Msg("model context window resolved")
 	return cfg
 }

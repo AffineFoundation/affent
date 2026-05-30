@@ -109,6 +109,36 @@ func TestNewSessionPoolModelContextWindowHonorsCompactPercent(t *testing.T) {
 	}
 }
 
+func TestNewSessionPoolUsesKnownModelContextWindowFallback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"qwen3.6-35b-a3b"}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := Config{
+		Listen:                 "127.0.0.1:0",
+		MaxSessions:            4,
+		SessionIdleTTL:         "5m",
+		WorkspaceRoot:          t.TempDir(),
+		BaseURL:                srv.URL + "/v1",
+		APIKey:                 "test",
+		Model:                  "qwen3.6-35b-a3b",
+		ModelContextWindowAuto: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	if pool.cfg.ModelContextWindowTokens != 262144 {
+		t.Fatalf("ModelContextWindowTokens = %d, want registry fallback 262144", pool.cfg.ModelContextWindowTokens)
+	}
+	if pool.cfg.CompactTriggerInputTokens != 0 {
+		t.Fatalf("CompactTriggerInputTokens = %d, want 0 derived at runtime", pool.cfg.CompactTriggerInputTokens)
+	}
+}
+
 func TestNewSessionPoolUsesEffectiveModelContextWindowFromProvider(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

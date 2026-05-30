@@ -105,3 +105,33 @@ func TestFetchModelMetadataUsesModelsEndpoint(t *testing.T) {
 		t.Fatalf("metadata = %+v, want target/65536", got)
 	}
 }
+
+func TestKnownModelMetadataNormalizesProviderIDs(t *testing.T) {
+	got, ok := KnownModelMetadata("Qwen/Qwen3.6-35B-A3B")
+	if !ok {
+		t.Fatal("KnownModelMetadata did not match qwen provider id")
+	}
+	if got.ID != "qwen3.6-35b-a3b" || got.ContextWindowTokens != 262144 {
+		t.Fatalf("metadata = %+v, want qwen3.6-35b-a3b/262144", got)
+	}
+}
+
+func TestResolveModelMetadataFallsBackToRegistry(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"qwen3.6-35b-a3b"}]}`))
+	}))
+	defer srv.Close()
+
+	client := NewLLMClient(srv.URL+"/v1", "", "qwen3.6-35b-a3b")
+	got, source, err := client.ResolveModelMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("ResolveModelMetadata: %v", err)
+	}
+	if source != "registry" {
+		t.Fatalf("source = %q, want registry", source)
+	}
+	if got.ContextWindowTokens != 262144 {
+		t.Fatalf("ContextWindowTokens = %d, want 262144", got.ContextWindowTokens)
+	}
+}

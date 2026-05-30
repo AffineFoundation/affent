@@ -232,6 +232,53 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 	}
 }
 
+func TestCommonFlagsDefaultModelContextWindowAuto(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if !cf.modelContextWindowAuto {
+		t.Fatal("model context window auto should default on")
+	}
+}
+
+func TestCommonFlagsCanDisableModelContextWindowAuto(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--model-context-window-auto=false"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if cf.modelContextWindowAuto {
+		t.Fatal("model context window auto = true after explicit false, want false")
+	}
+}
+
+func TestCommonFlagsConfigCanDisableModelContextWindowAuto(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "affent.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"compact":{"model_context_window_auto":false}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if cf.modelContextWindowAuto {
+		t.Fatal("model context window auto = true after config false, want false")
+	}
+}
+
 // TestEnvVarBeatsConfigFile pins the documented precedence:
 // CLI > env > config > built-in default. Real test: a user had
 // AFFENTCTL_MODEL=qwen-plus exported, ran `affentctl --config c.json`
@@ -700,6 +747,27 @@ func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
 	}
 	if !got.compactTriggerInputTokensAuto {
 		t.Fatal("compactTriggerInputTokensAuto = false, want provider-derived auto compact limit")
+	}
+}
+
+func TestResolveAffentctlModelContextWindowUsesKnownModelFallback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"qwen3.6-35b-a3b"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cf := commonFlags{
+		baseURL:                srv.URL + "/v1",
+		model:                  "qwen3.6-35b-a3b",
+		modelContextWindowAuto: true,
+	}
+	llm := agent.NewLLMClient(cf.baseURL, "", cf.model)
+	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
+	if got.modelContextWindowTokens != 262144 {
+		t.Fatalf("modelContextWindowTokens = %d, want registry fallback 262144", got.modelContextWindowTokens)
+	}
+	if got.compactTriggerInputTokens != 0 || got.compactTriggerInputTokensAuto {
+		t.Fatalf("compact trigger should be derived later from model policy, got trigger=%d auto=%t", got.compactTriggerInputTokens, got.compactTriggerInputTokensAuto)
 	}
 }
 

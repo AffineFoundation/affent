@@ -19,6 +19,38 @@ type ModelMetadata struct {
 	AutoCompactTokenLimit         int
 }
 
+// ResolveModelMetadata returns provider-advertised model metadata when
+// available, then falls back to Affent's local model registry for known models.
+// The source string is stable telemetry for callers and tests.
+func (c *LLMClient) ResolveModelMetadata(ctx context.Context) (ModelMetadata, string, error) {
+	meta, err := c.FetchModelMetadata(ctx)
+	if err == nil && meta.ContextWindowTokens > 0 {
+		return meta, "provider", nil
+	}
+	if fallback, ok := KnownModelMetadata(c.Model); ok {
+		return fallback, "registry", nil
+	}
+	if err != nil {
+		return ModelMetadata{}, "", err
+	}
+	return meta, "", nil
+}
+
+// KnownModelMetadata contains stable context-window facts for models whose
+// OpenAI-compatible providers commonly omit metadata from /models.
+func KnownModelMetadata(model string) (ModelMetadata, bool) {
+	id := normalizeModelMetadataID(model)
+	switch id {
+	case "qwen3.6-35b-a3b":
+		return ModelMetadata{
+			ID:                  "qwen3.6-35b-a3b",
+			ContextWindowTokens: 262144,
+		}, true
+	default:
+		return ModelMetadata{}, false
+	}
+}
+
 // FetchModelMetadata reads OpenAI-compatible /models metadata for c.Model.
 // Providers vary widely: many return only id/object, while others expose
 // context_window, max_context_window, context_length, or max_model_len. Missing
@@ -203,4 +235,10 @@ func parsePositiveIntString(s string) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+func normalizeModelMetadataID(model string) string {
+	model = strings.TrimSpace(strings.ToLower(model))
+	model = strings.TrimPrefix(model, "qwen/")
+	return model
 }

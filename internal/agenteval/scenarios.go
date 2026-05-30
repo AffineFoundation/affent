@@ -4143,7 +4143,8 @@ func longRunIntegratedMemoryRecoveryScenario() BatchScenario {
 		EnableLoopProtocol: true,
 		Prompts: []string{
 			"Iteration 1: continue the integrated CLI task using the active loop protocol and the project docs. The Python tests currently fail because the CLI JSON mode does not honor the documented durable output contract. Use the plan tool for this non-trivial change, run " + pythonUnittestDiscoverCommand + " to reproduce the failure, fix only the implementation, run the tests again, commit the fix, push it to origin main, and leave git status clean. Preserve stable project conventions for future sessions when they are verified and durable. Do not edit tests, docs/conventions.md, or LOOP.md in this iteration. The final answer must include AUTO-MEM-64, the test command, the commit hash, and the push result.",
-			"Iteration 2: continue the same long-run session instead of restarting. Recover the previous handoff from session history and recover the durable CLI JSON convention from memory before changing code. Add a --summary flag that still preserves the existing JSON marker contract, update or add stdlib unittest coverage for summary mode, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include AUTO-MEM-64, INTEGRATED-HANDOFF-26, integrated-prior, --summary, the second commit hash, the push result, and clean status.",
+			"Iteration 2: continue the same long-run session instead of restarting. Recover the previous handoff from session history and recover the durable CLI JSON convention from memory before changing code. Add a --summary flag that still preserves the existing JSON marker contract, update or add stdlib unittest coverage for summary mode, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. Stop after this iteration is verified; do not plan or start any additional feature without a later user turn. The final answer must include AUTO-MEM-64, INTEGRATED-HANDOFF-26, integrated-prior, --summary, the second commit hash, the push result, and clean status.",
+			"Iteration 3: continue the same long-run session after any prior budget boundary. Do not redo completed edits or create another feature. Recover the remaining state from the persisted plan, loop protocol, task state, session history, and memory. Finish any missing verification, git status check, second push to origin main, authoritative plan completion, and loop closure. The final answer must include AUTO-MEM-64, INTEGRATED-HANDOFF-26, integrated-prior, --summary, the second commit hash, the push result, clean status, and the closed loop status.",
 		},
 		Files: map[string]string{
 			".affent/loops/integrated-memory-recovery/LOOP.md": `# Loop Protocol: integrated-memory-recovery
@@ -4162,13 +4163,15 @@ Complete a realistic multi-iteration coding task while preserving durable conven
 
 - The repo is a tiny Python CLI with a failing JSON contract test.
 - The active work should prove the agent can combine loop state, plan state, memory, session history, test evidence, code edits, commit, and push without drifting.
+- There are exactly two implementation iterations in scope: fix JSON mode, then add summary mode. Any later turn is recovery and closure only.
 - Durable conventions should be kept compact and reusable; transient commit progress should stay out of memory.
 
 ## 3. Rules
 
 - Use Python stdlib only.
 - Keep implementation changes focused in reporter/cli.py unless a later iteration explicitly requires tests.
-- Do not modify this LOOP.md.
+- Do not invent or start extra features after the summary-mode iteration is verified.
+- Do not rewrite this LOOP.md by hand; use loop_protocol for any loop status change.
 - Each iteration must leave git status clean after push.
 
 ## 4. Plan/Step Pointer
@@ -4256,6 +4259,7 @@ if __name__ == "__main__":
 		},
 		VerifyCommand: cleanPushedMinCommitsVerifyCommand("3",
 			pythonUnittestDiscoverCommand,
+			`test "$(git rev-list --count HEAD)" -eq 3`,
 			`test -d .affent/memory/topics`,
 			`grep -R "AUTO-MEM-64" .affent/memory/topics`,
 			`grep -R "JSON" .affent/memory/topics`,
@@ -4285,6 +4289,8 @@ if __name__ == "__main__":
 			{Tool: "memory", Arg: "action", Substring: "search"},
 			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
 			{Tool: "memory", Arg: "content", Substring: "JSON"},
+			{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+			{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
 		},
 		RequiredToolResultText: map[string][]string{
 			"memory": {
@@ -4335,6 +4341,7 @@ if __name__ == "__main__":
 		},
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
 			{Tool: "shell", SummaryContains: "git push"},
+			{Tool: "loop_protocol", SummaryContains: "close"},
 		},
 		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
 			{PathContains: "reporter/cli.py", Action: "edit"},
@@ -4345,7 +4352,7 @@ if __name__ == "__main__":
 			{Source: "git_push"},
 			{Source: "memory"},
 		},
-		RequiredLoopProtocolFeeds: 2,
+		RequiredLoopProtocolFeeds: 3,
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
 		},
@@ -4360,18 +4367,19 @@ if __name__ == "__main__":
 			},
 		},
 		RequiredTraceEventCounts: map[string]int{
-			"loop.turn_checkpoint": 2,
+			"loop.turn_checkpoint": 3,
 		},
+		RequiredLoopProtocolFinalStatus: "completed",
 		RequiredFinalText: []string{
 			"AUTO-MEM-64",
 			"INTEGRATED-HANDOFF-26",
 			"integrated-prior",
 			"--summary",
-			pythonUnittestDiscoverCommand,
 			"commit",
 			"push",
 			"clean",
 		},
+		ForbiddenFinalText: []string{"--verbose"},
 		RequiredFileSubstrings: map[string][]string{
 			"reporter/cli.py": {
 				"json.dumps",
@@ -4383,9 +4391,16 @@ if __name__ == "__main__":
 				"AUTO-MEM-64",
 			},
 		},
+		ForbiddenFileSubstrings: map[string][]string{
+			"reporter/cli.py": {
+				"--verbose",
+			},
+			"tests/test_cli.py": {
+				"verbose",
+			},
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles: []string{
-			".affent/loops/integrated-memory-recovery/LOOP.md",
 			"docs/conventions.md",
 		},
 		ForbidWorkspaceAbsolutePaths: true,

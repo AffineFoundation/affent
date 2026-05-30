@@ -196,7 +196,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected. (env: AFFENTCTL_COMPACT_TRIGGER)")
 	fs.IntVar(&c.compactTriggerInputTokens, "compact-trigger-input-tokens", 0, "compact before a model call when estimated request input tokens reach this value. 0 derives from the byte trigger; negative disables request-pressure compaction. (env: AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS)")
 	fs.IntVar(&c.modelContextWindowTokens, "model-context-window-tokens", 0, "effective model context window in tokens; 0 = unknown. When set, proactive compaction derives from this window. (env: AFFENTCTL_MODEL_CONTEXT_WINDOW_TOKENS)")
-	fs.BoolVar(&c.modelContextWindowAuto, "model-context-window-auto", false, "best-effort discovery of the model context window from the upstream /models endpoint when explicit window is unset. (env: AFFENTCTL_MODEL_CONTEXT_WINDOW_AUTO)")
+	fs.BoolVar(&c.modelContextWindowAuto, "model-context-window-auto", true, "best-effort discovery of the model context window from the upstream /models endpoint when explicit window is unset. (env: AFFENTCTL_MODEL_CONTEXT_WINDOW_AUTO)")
 	fs.IntVar(&c.compactTriggerPercent, "compact-trigger-input-percent", 0, "percent of --model-context-window-tokens used for proactive compaction when --compact-trigger-input-tokens is unset. 0 = runtime default. (env: AFFENTCTL_COMPACT_TRIGGER_INPUT_PERCENT)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting (env: AFFENTCTL_COMPACT_KEEP_LAST)")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
@@ -265,7 +265,7 @@ func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LL
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), affentctlModelContextMetadataTimeout)
 	defer cancel()
-	meta, err := llm.FetchModelMetadata(ctx)
+	meta, source, err := llm.ResolveModelMetadata(ctx)
 	if err != nil {
 		log.Debug().Err(err).Str("model", c.model).Msg("model context window metadata unavailable")
 		return c
@@ -283,10 +283,11 @@ func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LL
 	log.Info().
 		Str("model", c.model).
 		Str("metadata_model", meta.ID).
+		Str("metadata_source", source).
 		Int("model_context_window_tokens", c.modelContextWindowTokens).
 		Int("effective_context_window_percent", c.modelContextWindowEffectivePercent).
 		Int("auto_compact_token_limit", c.compactTriggerInputTokens).
-		Msg("model context window resolved from provider metadata")
+		Msg("model context window resolved")
 	return c
 }
 
