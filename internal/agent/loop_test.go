@@ -1170,6 +1170,17 @@ func TestTurnOptionsApplyScheduledTurnScopeDisablesLoopForTimers(t *testing.T) {
 		t.Fatal("ordinary scheduled turn dropped unrelated read_file tool")
 	}
 
+	missingKind := TurnOptions{UserSource: "schedule"}.ApplyScheduledTurnScope(reg)
+	if !missingKind.DisableLoopProtocol {
+		t.Fatal("scheduled turn without an explicit kind should default away from loop protocol control")
+	}
+	if missingKind.Tools == nil {
+		t.Fatal("scheduled turn without an explicit kind should receive a narrowed tool surface")
+	}
+	if _, ok := missingKind.Tools.Get(LoopProtocolToolName); ok {
+		t.Fatalf("scheduled turn without an explicit kind still exposes %s", LoopProtocolToolName)
+	}
+
 	loopTick := TurnOptions{UserSource: "schedule", ScheduleKind: SessionScheduleKindLoopTick}.ApplyScheduledTurnScope(reg)
 	if loopTick.DisableLoopProtocol || loopTick.Tools != nil {
 		t.Fatalf("loop_tick options = %+v, want loop protocol control preserved", loopTick)

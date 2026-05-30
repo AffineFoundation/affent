@@ -387,8 +387,7 @@ func (opts TurnOptions) ApplyScheduledTurnScope(tools *Registry) TurnOptions {
 	if strings.TrimSpace(opts.UserSource) != "schedule" {
 		return opts
 	}
-	kind := strings.TrimSpace(opts.ScheduleKind)
-	if kind == "" || kind == SessionScheduleKindLoopTick {
+	if strings.TrimSpace(opts.ScheduleKind) == SessionScheduleKindLoopTick {
 		return opts
 	}
 	opts.DisableLoopProtocol = true

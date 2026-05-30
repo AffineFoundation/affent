@@ -683,6 +683,9 @@ func TestBatchScenarioPromptHelpers(t *testing.T) {
 	if got := (PromptOptions{UserSource: "schedule", ScheduleKind: "custom"}).turnOptions(); !got.DisableLoopProtocol {
 		t.Fatalf("scheduled custom turn options = %+v, want loop protocol disabled", got)
 	}
+	if got := (PromptOptions{UserSource: "schedule"}).turnOptions(); !got.DisableLoopProtocol {
+		t.Fatalf("scheduled turn without kind options = %+v, want loop protocol disabled", got)
+	}
 	if got := (PromptOptions{UserSource: "schedule", ScheduleKind: agent.SessionScheduleKindLoopTick}).turnOptions(); got.DisableLoopProtocol {
 		t.Fatalf("scheduled loop_tick options = %+v, want loop protocol enabled", got)
 	}

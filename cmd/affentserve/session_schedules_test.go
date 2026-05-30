@@ -606,6 +606,24 @@ func TestSessionPool_ClaimScheduleDoesNotAdvanceBeforeTurnEnd(t *testing.T) {
 	}
 }
 
+func TestSessionScheduleTurnOptionsRequireExplicitLoopTick(t *testing.T) {
+	timer := sessionScheduleTurnOptions(nil, sessionScheduleRun{
+		ScheduleID:   "sched_missing_kind",
+		ScheduleKind: "",
+	})
+	if !timer.DisableLoopProtocol {
+		t.Fatalf("missing-kind scheduled turn options = %+v, want loop protocol disabled", timer)
+	}
+
+	loopTick := sessionScheduleTurnOptions(nil, sessionScheduleRun{
+		ScheduleID:   "sched_loop",
+		ScheduleKind: sessionScheduleKindLoopTick,
+	})
+	if loopTick.DisableLoopProtocol {
+		t.Fatalf("loop_tick scheduled turn options = %+v, want loop protocol enabled", loopTick)
+	}
+}
+
 func TestSessionScheduleTurnFailureKind(t *testing.T) {
 	cases := []struct {
 		reason string
