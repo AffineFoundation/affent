@@ -63,10 +63,11 @@ func TestHandleSessionMemoryAddsDurableMemory(t *testing.T) {
 	createDurableSessionDir(t, pool, "memory-add")
 
 	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-add/memory", bytes.NewBufferString(`{
-		"target": "memory",
-		"topic": "research",
-		"content": "CoinGecko pages require browser fallback"
-	}`))
+			"target": "memory",
+			"kind": "project_fact",
+			"topic": "research",
+			"content": "CoinGecko pages require browser fallback"
+		}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusCreated {
@@ -82,6 +83,9 @@ func TestHandleSessionMemoryAddsDurableMemory(t *testing.T) {
 	if got := strings.Join(out.Topics[0].Entries, "\n"); !strings.Contains(got, "CoinGecko pages require browser fallback") {
 		t.Fatalf("topic entries = %q", got)
 	}
+	if len(out.Topics[0].Kinds) != 1 || out.Topics[0].Kinds[0] != "project_fact" {
+		t.Fatalf("topic kinds = %+v, want project_fact", out.Topics[0].Kinds)
+	}
 
 	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/memory-add/memory", nil)
 	w = httptest.NewRecorder()
@@ -95,6 +99,9 @@ func TestHandleSessionMemoryAddsDurableMemory(t *testing.T) {
 	}
 	if len(out.Topics) != 1 || out.Topics[0].EntryCount != 1 {
 		t.Fatalf("durable topics = %+v", out.Topics)
+	}
+	if len(out.Topics[0].Kinds) != 1 || out.Topics[0].Kinds[0] != "project_fact" {
+		t.Fatalf("durable topic kinds = %+v, want project_fact", out.Topics[0].Kinds)
 	}
 }
 
@@ -144,11 +151,12 @@ func TestHandleSessionMemoryReplacesDurableMemory(t *testing.T) {
 	}
 
 	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-replace/memory", bytes.NewBufferString(`{
-		"action": "replace",
-		"target": "memory",
-		"topic": "research",
-		"old_text": "stale browser fallback",
-		"new_content": "current browser fallback rule"
+			"action": "replace",
+			"target": "memory",
+			"kind": "lesson",
+			"topic": "research",
+			"old_text": "stale browser fallback",
+			"new_content": "current browser fallback rule"
 	}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
@@ -166,6 +174,9 @@ func TestHandleSessionMemoryReplacesDurableMemory(t *testing.T) {
 	if strings.Contains(gotEntries, "stale browser fallback") || !strings.Contains(gotEntries, "current browser fallback rule") {
 		t.Fatalf("topic entries after replace = %q", gotEntries)
 	}
+	if len(out.Topics[0].Kinds) != 1 || out.Topics[0].Kinds[0] != "lesson" {
+		t.Fatalf("topic kinds after replace = %+v, want lesson", out.Topics[0].Kinds)
+	}
 }
 
 func TestHandleSessionMemoryAddRejectsInvalidContent(t *testing.T) {
@@ -180,6 +191,21 @@ func TestHandleSessionMemoryAddRejectsInvalidContent(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "content is required") {
 		t.Fatalf("body = %s, want content validation", w.Body.String())
+	}
+}
+
+func TestHandleSessionMemoryRejectsInvalidKind(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	createDurableSessionDir(t, pool, "memory-kind-invalid")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-kind-invalid/memory", bytes.NewBufferString(`{"target":"memory","kind":"task_state","topic":"research","content":"temporary push status"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unsupported memory kind") {
+		t.Fatalf("body = %s, want kind validation", w.Body.String())
 	}
 }
 

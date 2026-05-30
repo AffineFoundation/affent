@@ -667,6 +667,47 @@ func TestMemoryTwoTargetsIndependent(t *testing.T) {
 	}
 }
 
+func TestMemoryEntryMetadataPersistsWithoutPollutingContent(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.AddWithMetadata(TargetMemory, "conventions", "JSON output includes AUTO-MEM-64", MemoryWriteMetadata{Kind: "convention"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK || len(resp.Kinds) != 1 || resp.Kinds[0] != "convention" {
+		t.Fatalf("add response = %+v, want persisted kind", resp)
+	}
+	path := filepath.Join(s.MemoryDir, "topics", "conventions.md")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "<!-- affent-memory-kind: convention -->") {
+		t.Fatalf("memory file missing durable kind metadata:\n%s", raw)
+	}
+	entries, err := readMemoryFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entryContent(entries[0]) != "JSON output includes AUTO-MEM-64" {
+		t.Fatalf("entry content should hide metadata from model-visible text: %+v", entries)
+	}
+	search, err := s.Search(TargetMemory, "conventions", "AUTO-MEM-64", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 1 || search.Results[0].Kind != "convention" || strings.Contains(search.Results[0].Snippet, "affent-memory-kind") {
+		t.Fatalf("search result = %+v, want kind metadata with clean snippet", search.Results)
+	}
+
+	replace, err := s.ReplaceWithMetadata(TargetMemory, "conventions", "AUTO-MEM-64", "JSON output includes AUTO-MEM-73", MemoryWriteMetadata{Kind: "decision"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !replace.OK || len(replace.Kinds) != 1 || replace.Kinds[0] != "decision" {
+		t.Fatalf("replace response = %+v, want updated kind", replace)
+	}
+}
+
 func TestMemoryAtomicWriteRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "MEMORY.md")

@@ -29,6 +29,7 @@ type sessionMemoryBucket struct {
 	Target     string   `json:"target"`
 	Topic      string   `json:"topic,omitempty"`
 	Entries    []string `json:"entries,omitempty"`
+	Kinds      []string `json:"kinds,omitempty"`
 	EntryCount int      `json:"entry_count"`
 	CharsUsed  int      `json:"chars_used"`
 	CharsLimit int      `json:"chars_limit,omitempty"`
@@ -40,6 +41,7 @@ type sessionMemoryBucket struct {
 type sessionMemoryMutationRequest struct {
 	Action     string `json:"action,omitempty"`
 	Target     string `json:"target"`
+	Kind       string `json:"kind,omitempty"`
 	Topic      string `json:"topic,omitempty"`
 	Content    string `json:"content,omitempty"`
 	OldText    string `json:"old_text,omitempty"`
@@ -120,13 +122,14 @@ func handleSessionMemoryMutation(pool *SessionPool, sessionID string, w http.Res
 }
 
 func applySessionMemoryMutation(store *memory.FileMemoryStore, target memory.MemoryTarget, req sessionMemoryMutationRequest) (memory.MemoryResponse, error) {
+	meta := memory.MemoryWriteMetadata{Kind: req.Kind}
 	switch req.Action {
 	case "", "add":
-		return store.Add(target, req.Topic, req.Content)
+		return store.AddWithMetadata(target, req.Topic, req.Content, meta)
 	case "remove":
 		return store.Remove(target, req.Topic, req.OldText)
 	case "replace":
-		return store.Replace(target, req.Topic, req.OldText, req.NewContent)
+		return store.ReplaceWithMetadata(target, req.Topic, req.OldText, req.NewContent, meta)
 	default:
 		return memory.MemoryResponse{Target: target, Topic: req.Topic, Message: "unsupported memory action"}, nil
 	}
@@ -206,6 +209,7 @@ func decodeSessionMemoryMutationRequest(w http.ResponseWriter, r *http.Request) 
 		return req, errors.New("request body must contain a single JSON object")
 	}
 	req.Target = strings.TrimSpace(req.Target)
+	req.Kind = strings.TrimSpace(req.Kind)
 	req.Topic = strings.TrimSpace(req.Topic)
 	req.Action = strings.TrimSpace(req.Action)
 	req.Content = strings.TrimSpace(req.Content)
@@ -217,11 +221,17 @@ func decodeSessionMemoryMutationRequest(w http.ResponseWriter, r *http.Request) 
 		if req.Content == "" {
 			return req, errors.New("content is required")
 		}
+		if req.Kind != "" && !memory.IsSupportedWriteKind(req.Kind) {
+			return req, errors.New("unsupported memory kind")
+		}
 	case "remove":
 		if req.OldText == "" {
 			return req, errors.New("old_text is required")
 		}
 	case "replace":
+		if req.Kind != "" && !memory.IsSupportedWriteKind(req.Kind) {
+			return req, errors.New("unsupported memory kind")
+		}
 		if req.OldText == "" {
 			return req, errors.New("old_text is required")
 		}
@@ -246,6 +256,7 @@ func inspectSessionMemoryBucket(store *memory.FileMemoryStore, target memory.Mem
 		Target:   string(target),
 		Topic:    out.Topic,
 		Entries:  append([]string(nil), out.Entries...),
+		Kinds:    append([]string(nil), out.Kinds...),
 		NewestAt: newestAt,
 		Preview:  sessionMemoryBucketPreview(out.Entries),
 	}

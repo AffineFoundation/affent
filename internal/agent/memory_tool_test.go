@@ -31,7 +31,7 @@ func newMemoryToolFixture(t *testing.T) (*Tool, *memory.FileMemoryStore) {
 // routes to TargetMemory + default "general" topic, the entry lands
 // on disk, and the response payload is well-formed JSON.
 func TestMemoryTool_DispatchAdd(t *testing.T) {
-	tool, _ := newMemoryToolFixture(t)
+	tool, store := newMemoryToolFixture(t)
 	out, err := tool.Execute(context.Background(), json.RawMessage(
 		`{"action":"add","kind":"project_fact","content":"hello memory"}`))
 	if err != nil {
@@ -49,6 +49,13 @@ func TestMemoryTool_DispatchAdd(t *testing.T) {
 	}
 	if resp.Topic != memory.DefaultTopic {
 		t.Errorf("default topic should be %q; got %q", memory.DefaultTopic, resp.Topic)
+	}
+	search, err := store.Search(memory.TargetMemory, memory.DefaultTopic, "hello", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 1 || search.Results[0].Kind != "project_fact" {
+		t.Fatalf("search results = %+v, want persisted write kind", search.Results)
 	}
 }
 
@@ -240,7 +247,7 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	if schema.Properties["kind"].MaxLength != maxMemoryKindBytes {
 		t.Fatalf("kind maxLength = %d, want %d", schema.Properties["kind"].MaxLength, maxMemoryKindBytes)
 	}
-	if got, want := strings.Join(schema.Properties["kind"].Enum, ","), strings.Join(memoryWriteKinds, ","); got != want {
+	if got, want := strings.Join(schema.Properties["kind"].Enum, ","), strings.Join(memory.SupportedWriteKinds(), ","); got != want {
 		t.Fatalf("kind enum = %s, want %s", got, want)
 	}
 	if schema.Properties["topic"].MinLength != 1 {

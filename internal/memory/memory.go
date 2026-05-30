@@ -38,12 +38,95 @@ func stampMemoryEntry(content string) string {
 	return "[" + nowUTC().Format(time.RFC3339) + "]\n" + content
 }
 
+// MemoryWriteMetadata carries durable, file-backed metadata for new or
+// replaced memory entries. It is intentionally small: the entry body remains
+// plain Markdown, and metadata is stored as an Affent-owned Markdown comment.
+type MemoryWriteMetadata struct {
+	Kind string `json:"kind,omitempty"`
+}
+
+var supportedMemoryWriteKinds = []string{
+	"preference",
+	"project_fact",
+	"convention",
+	"decision",
+	"lesson",
+}
+
+func SupportedWriteKinds() []string {
+	return append([]string(nil), supportedMemoryWriteKinds...)
+}
+
+func IsSupportedWriteKind(kind string) bool {
+	kind = strings.TrimSpace(kind)
+	for _, allowed := range supportedMemoryWriteKinds {
+		if kind == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+// stampMemoryEntryWithMetadata prepends timestamp and optional entry metadata.
+func stampMemoryEntryWithMetadata(content string, meta MemoryWriteMetadata) string {
+	kind := strings.TrimSpace(meta.Kind)
+	if kind == "" {
+		return stampMemoryEntry(content)
+	}
+	return "[" + nowUTC().Format(time.RFC3339) + "]\n" + renderMemoryKindMeta(kind) + "\n" + content
+}
+
 // entryContent strips the timestamp prefix if present, returning just
 // the user-visible body. Used wherever content is matched / displayed
 // without metadata.
 func entryContent(raw string) string {
-	_, c := splitMemoryEntry(raw)
+	_, c := splitMemoryEntryWithMetadata(raw)
 	return c
+}
+
+// entryMetadata returns timestamp plus Affent-owned entry metadata without
+// exposing it as user-visible body text.
+func entryMetadata(raw string) (createdAt, kind string) {
+	meta, _ := splitMemoryEntryWithMetadata(raw)
+	return meta.CreatedAt, meta.Kind
+}
+
+type memoryEntryMetadata struct {
+	CreatedAt string
+	Kind      string
+}
+
+func splitMemoryEntryWithMetadata(raw string) (memoryEntryMetadata, string) {
+	createdAt, body := splitMemoryEntry(raw)
+	meta := memoryEntryMetadata{CreatedAt: createdAt}
+	kind, rest, ok := consumeMemoryKindMeta(body)
+	if ok {
+		meta.Kind = kind
+		body = rest
+	}
+	return meta, body
+}
+
+func renderMemoryKindMeta(kind string) string {
+	return memoryKindMetaPrefix + strings.TrimSpace(kind) + memoryKindMetaSuffix
+}
+
+func consumeMemoryKindMeta(body string) (kind, rest string, ok bool) {
+	body = strings.TrimLeft(body, "\n")
+	line, tail, found := strings.Cut(body, "\n")
+	if !found {
+		line = body
+		tail = ""
+	}
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, memoryKindMetaPrefix) || !strings.HasSuffix(line, memoryKindMetaSuffix) {
+		return "", body, false
+	}
+	kind = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, memoryKindMetaPrefix), memoryKindMetaSuffix))
+	if kind == "" {
+		return "", body, false
+	}
+	return kind, strings.TrimLeft(tail, "\n"), true
 }
 
 // newestEntryTimestamp returns the lexicographically max timestamp
@@ -151,6 +234,7 @@ type MemoryResponse struct {
 	Target  MemoryTarget         `json:"target"`
 	Topic   string               `json:"topic,omitempty"`
 	Entries []string             `json:"entries,omitempty"`
+	Kinds   []string             `json:"kinds,omitempty"`
 	Matches []string             `json:"matches,omitempty"`
 	Results []MemorySearchResult `json:"results,omitempty"`
 	Topics  []MemoryTopicSummary `json:"topics,omitempty"`
@@ -162,6 +246,7 @@ type MemorySearchResult struct {
 	Topic     string  `json:"topic"`
 	Snippet   string  `json:"snippet"`
 	Score     float64 `json:"score"`
+	Kind      string  `json:"kind,omitempty"`
 	CreatedAt string  `json:"created_at,omitempty"` // RFC3339, "" for un-stamped legacy entries
 }
 
@@ -320,6 +405,11 @@ const DefaultTopic = "general"
 // tripping stays safe.
 const memoryEntryDelim = "\n§\n"
 
+const (
+	memoryKindMetaPrefix = "<!-- affent-memory-kind: "
+	memoryKindMetaSuffix = " -->"
+)
+
 // memorySnippetMax caps the per-entry text returned in search hits.
 // Long entries (multi-paragraph deployment guides, incident postmortems)
 // would otherwise dump their full body into the model context — wasted
@@ -473,6 +563,10 @@ func (s *FileMemoryStore) Snapshot() string {
 // target=user. Normalized duplicate entries are accepted as no-op
 // success; over-limit additions return OK=false with current Entries.
 func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (MemoryResponse, error) {
+	return s.AddWithMetadata(target, topic, content, MemoryWriteMetadata{})
+}
+
+func (s *FileMemoryStore) AddWithMetadata(target MemoryTarget, topic, content string, meta MemoryWriteMetadata) (MemoryResponse, error) {
 	if err := validateTarget(target); err != nil {
 		return MemoryResponse{Target: target, Message: err.Error()}, nil
 	}
@@ -529,7 +623,7 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 			return s.respondLocked(target, topic, true, false, "entry already exists (no duplicate added)", entries, nil), nil
 		}
 	}
-	stamped := stampMemoryEntry(content)
+	stamped := stampMemoryEntryWithMetadata(content, meta)
 	limit := s.limitFor(target, topic)
 	newEntries := append(append([]string{}, entries...), stamped)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
@@ -547,6 +641,10 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 // Replace substitutes newContent for the single entry containing
 // oldText as a substring inside the named bucket.
 func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newContent string) (MemoryResponse, error) {
+	return s.ReplaceWithMetadata(target, topic, oldText, newContent, MemoryWriteMetadata{})
+}
+
+func (s *FileMemoryStore) ReplaceWithMetadata(target MemoryTarget, topic, oldText, newContent string, meta MemoryWriteMetadata) (MemoryResponse, error) {
 	if err := validateTarget(target); err != nil {
 		return MemoryResponse{Target: target, Message: err.Error()}, nil
 	}
@@ -619,7 +717,7 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	// Re-stamp on replace so the entry's freshness reflects this
 	// update, not the original creation. Helps the model see "I just
 	// re-confirmed this fact" vs "this is from 6 months ago".
-	newEntries[idx] = stampMemoryEntry(newContent)
+	newEntries[idx] = stampMemoryEntryWithMetadata(newContent, meta)
 	limit := s.limitFor(target, topic)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
 		return s.respondLocked(target, topic, false, false,
@@ -780,7 +878,7 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			})
 		}
 		for _, e := range entries {
-			createdAt, body := splitMemoryEntry(e)
+			meta, body := splitMemoryEntryWithMetadata(e)
 			// Score against content AND topic name. Real-rollout
 			// finding: a user organizing memory by topic ("incidents",
 			// "deploy", "auth") naturally queries with terms that
@@ -803,12 +901,13 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			// un-stamped) get factor 1.0, not 0.5, so the rollout of
 			// stamping doesn't suddenly down-rank everything that was
 			// already there.
-			score *= recencyFactor(createdAt)
+			score *= recencyFactor(meta.CreatedAt)
 			hits = appendBoundedMemoryHits(hits, MemorySearchResult{
 				Topic:     b.topic,
 				Snippet:   centerSnippet(body, terms, memorySnippetMax),
 				Score:     score,
-				CreatedAt: createdAt,
+				Kind:      meta.Kind,
+				CreatedAt: meta.CreatedAt,
 			}, topK)
 		}
 	}
@@ -1314,8 +1413,10 @@ func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok, m
 	// into the tool response. Freshness data is available separately
 	// via Search (MemorySearchResult.CreatedAt).
 	cleaned := make([]string, len(entries))
+	kinds := make([]string, len(entries))
 	for i, e := range entries {
 		cleaned[i] = trimSnippet(entryContent(e), memoryResponseEntryMax)
+		_, kinds[i] = entryMetadata(e)
 	}
 	return MemoryResponse{
 		OK:      ok,
@@ -1324,6 +1425,7 @@ func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok, m
 		Topic:   topic,
 		Message: msg,
 		Entries: cleaned,
+		Kinds:   trimTrailingEmptyMemoryKinds(kinds),
 		Matches: matches,
 		Usage: &MemoryUsage{
 			Percent:    pctOf(current, limit),
@@ -1332,6 +1434,19 @@ func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok, m
 			EntryCount: len(entries),
 		},
 	}
+}
+
+func trimTrailingEmptyMemoryKinds(kinds []string) []string {
+	last := -1
+	for i := range kinds {
+		if strings.TrimSpace(kinds[i]) != "" {
+			last = i
+		}
+	}
+	if last < 0 {
+		return nil
+	}
+	return kinds[:last+1]
 }
 
 // pctOf returns 0..100, clamped.

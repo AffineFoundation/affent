@@ -37,12 +37,9 @@ var memoryActions = []string{
 	memoryActionSearch, memoryActionList,
 }
 
-var memoryWriteKinds = []string{
-	"preference",
-	"project_fact",
-	"convention",
-	"decision",
-	"lesson",
+type metadataMemoryStore interface {
+	AddWithMetadata(target memory.MemoryTarget, topic, content string, meta memory.MemoryWriteMetadata) (memory.MemoryResponse, error)
+	ReplaceWithMetadata(target memory.MemoryTarget, topic, oldText, newContent string, meta memory.MemoryWriteMetadata) (memory.MemoryResponse, error)
 }
 
 type memoryToolArgs struct {
@@ -95,7 +92,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 				"type":        "string",
 				"minLength":   1,
 				"maxLength":   maxMemoryKindBytes,
-				"enum":        memoryWriteKinds,
+				"enum":        memory.SupportedWriteKinds(),
 				"description": "Required for add/replace. Classifies the durable write: preference, project_fact, convention, decision, or lesson. Do not write current task progress as memory.",
 			},
 			"topic": map[string]any{
@@ -188,7 +185,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: issue}
 					break
 				}
-				resp, storeErr = store.Add(target, p.Topic, p.Content)
+				resp, storeErr = memoryAdd(store, target, p.Topic, p.Content, p.Kind)
 			case memoryActionReplace:
 				if p.OldText == "" || p.Content == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace. Next: search/list first, then retry with a unique old_text substring and the full replacement content."}
@@ -198,7 +195,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: issue}
 					break
 				}
-				resp, storeErr = store.Replace(target, p.Topic, p.OldText, p.Content)
+				resp, storeErr = memoryReplace(store, target, p.Topic, p.OldText, p.Content, p.Kind)
 			case memoryActionRemove:
 				if p.OldText == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove. Next: search/list first, then retry with a unique old_text substring from the entry to remove."}
@@ -364,10 +361,22 @@ func validateMemoryWriteKind(kind string) string {
 	if kind == "" {
 		return "kind is required for memory writes. Next: retry with kind=preference, project_fact, convention, decision, or lesson; do not write current task progress as memory."
 	}
-	for _, allowed := range memoryWriteKinds {
-		if kind == allowed {
-			return ""
-		}
+	if memory.IsSupportedWriteKind(kind) {
+		return ""
 	}
 	return fmt.Sprintf("invalid memory kind %q. Next: retry with one stable kind: preference, project_fact, convention, decision, or lesson; keep current task progress in plan/loop/task state, not memory.", kind)
+}
+
+func memoryAdd(store memory.MemoryStore, target memory.MemoryTarget, topic, content, kind string) (memory.MemoryResponse, error) {
+	if metadataStore, ok := store.(metadataMemoryStore); ok {
+		return metadataStore.AddWithMetadata(target, topic, content, memory.MemoryWriteMetadata{Kind: kind})
+	}
+	return store.Add(target, topic, content)
+}
+
+func memoryReplace(store memory.MemoryStore, target memory.MemoryTarget, topic, oldText, content, kind string) (memory.MemoryResponse, error) {
+	if metadataStore, ok := store.(metadataMemoryStore); ok {
+		return metadataStore.ReplaceWithMetadata(target, topic, oldText, content, memory.MemoryWriteMetadata{Kind: kind})
+	}
+	return store.Replace(target, topic, oldText, content)
 }
