@@ -799,6 +799,7 @@ func runtimeSurfaceHasCapabilityData(p *sse.RuntimeSurfacePayload) bool {
 		len(p.Tools) > 0 ||
 		len(p.ToolCallCaps) > 0 ||
 		len(p.CompletionGuards) > 0 ||
+		p.LoopProtocolControl != nil ||
 		p.Capabilities.Builtins ||
 		len(p.Capabilities.WorkspaceTools) > 0 ||
 		p.Capabilities.Memory ||
@@ -831,6 +832,19 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	}
 	if p.ModelContextWindowAuto {
 		fields = append(fields, "model_context_window_auto=true")
+	}
+	if p.LoopProtocolControl != nil {
+		if p.LoopProtocolControl.Enabled {
+			fields = append(fields, "loop_protocol_control=enabled")
+		} else {
+			fields = append(fields, "loop_protocol_control=disabled")
+		}
+		if p.LoopProtocolControl.ToolAvailable {
+			fields = append(fields, "loop_protocol_tool_available=true")
+		}
+		if reason := strings.TrimSpace(p.LoopProtocolControl.Reason); reason != "" {
+			fields = append(fields, "loop_protocol_control_reason="+reason)
+		}
 	}
 	addIntField("model_context_window_effective_percent", p.ModelContextWindowEffectivePercent)
 	addIntField("reserved_output_tokens", p.ReservedOutputTokens)

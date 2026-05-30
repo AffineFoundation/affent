@@ -189,6 +189,7 @@ func runtimeSurfaceHasCapabilityData(surface *sse.RuntimeSurfacePayload) bool {
 		len(surface.Tools) > 0 ||
 		len(surface.ToolCallCaps) > 0 ||
 		len(surface.CompletionGuards) > 0 ||
+		surface.LoopProtocolControl != nil ||
 		len(caps.WorkspaceTools) > 0 ||
 		caps.Builtins ||
 		caps.Memory ||

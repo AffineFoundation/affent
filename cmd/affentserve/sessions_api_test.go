@@ -1397,6 +1397,10 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 				Memory:         true,
 				SessionSearch:  true,
 			},
+			LoopProtocolControl: &sse.RuntimeControlScope{
+				Enabled: false,
+				Reason:  "disabled_for_turn",
+			},
 			Workspace: &sse.RuntimeWorkspace{
 				DefaultCWD: "workspace_root",
 				PathMode:   "workspace_relative",
@@ -1498,6 +1502,9 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	}
 	if !stringSliceContains(task.KnownFacts, "available capabilities: workspace, memory/history") {
 		t.Fatalf("known_facts = %+v, want available runtime capabilities", task.KnownFacts)
+	}
+	if !stringSliceContains(task.KnownFacts, "latest turn loop protocol control: disabled") {
+		t.Fatalf("known_facts = %+v, want loop protocol control scope", task.KnownFacts)
 	}
 	if !stringSliceContains(task.KnownFacts, "latest request mode: execute_plan") ||
 		!stringSliceContains(task.KnownFacts, "latest request source: schedule checkin sched_clamp") {

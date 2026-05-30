@@ -187,7 +187,21 @@ func sessionTaskKnownFacts(summary sessionSummary, eventState sessionTaskEventSt
 	if available, _ := runtimeSurfaceCapabilityLabels(eventState.RuntimeSurface); len(available) > 0 {
 		out = appendUniqueLimited(out, "available capabilities: "+strings.Join(available, ", "), sessionTaskStateMaxItems)
 	}
+	if fact := sessionTaskLoopProtocolControlFact(eventState.RuntimeSurface); fact != "" {
+		out = appendUniqueLimited(out, fact, sessionTaskStateMaxItems)
+	}
 	return out
+}
+
+func sessionTaskLoopProtocolControlFact(surface *sse.RuntimeSurfacePayload) string {
+	if surface == nil || surface.LoopProtocolControl == nil {
+		return ""
+	}
+	state := "disabled"
+	if surface.LoopProtocolControl.Enabled {
+		state = "enabled"
+	}
+	return "latest turn loop protocol control: " + state
 }
 
 func sessionTaskRequestSourceFact(eventState sessionTaskEventState) string {
