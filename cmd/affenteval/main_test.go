@@ -253,7 +253,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
-	for _, want := range []string{"-list-coverage", "-require-expectation-capability", "-require-expectation-domain", "-require-task-state-evidence-source", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate", "-max-expectation-domain-avg-total-tokens", "-min-expectation-domain-source-access-verified-rate"} {
+	for _, want := range []string{"-list-coverage", "-require-expectation-capability", "-require-expectation-domain", "-require-task-state-evidence-source", "-require-runtime-surface-refresh-reason", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate", "-max-expectation-domain-avg-total-tokens", "-min-expectation-domain-source-access-verified-rate"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("--help missing expectation coverage gate %q:\n%s", want, help)
 		}
@@ -575,6 +575,7 @@ func TestTraceFileQualityGateConfigDisablesProfileScenarioCoverage(t *testing.T)
 		len(traceGates.RequiredExpectationCapabilities) != 0 ||
 		len(traceGates.RequiredExpectationDomains) != 0 ||
 		len(traceGates.RequiredTaskStateEvidenceSources) != 0 ||
+		len(traceGates.RequiredRuntimeSurfaceRefreshReasons) != 0 ||
 		len(traceGates.MinExpectationDomainSourceAccessVerifiedRates) != 0 ||
 		len(traceGates.MaxExpectationDomainToolErrorRates) != 0 {
 		t.Fatalf("trace-file gates should drop profile scenario-coverage gates: %+v", traceGates)
@@ -585,18 +586,23 @@ func TestTraceFileQualityGateConfigDisablesProfileScenarioCoverage(t *testing.T)
 	}
 
 	explicitGates := qualityGateConfig{
-		RequiredExpectationCapabilities:  []string{"memory"},
-		RequiredTaskStateEvidenceSources: []string{"git_push"},
+		RequiredExpectationCapabilities:      []string{"memory"},
+		RequiredTaskStateEvidenceSources:     []string{"git_push"},
+		RequiredRuntimeSurfaceRefreshReasons: []string{"post_compaction"},
 	}
 	traceGates = qualityGateConfigForTraceFile(explicitGates, func(name string) bool {
 		return name == "require-expectation-capability" ||
-			name == "require-task-state-evidence-source"
+			name == "require-task-state-evidence-source" ||
+			name == "require-runtime-surface-refresh-reason"
 	})
 	if !reflect.DeepEqual(traceGates.RequiredExpectationCapabilities, []string{"memory"}) {
 		t.Fatalf("explicit trace-file expectation gate should be preserved: %+v", traceGates)
 	}
 	if !reflect.DeepEqual(traceGates.RequiredTaskStateEvidenceSources, []string{"git_push"}) {
 		t.Fatalf("explicit trace-file task-state evidence gate should be preserved: %+v", traceGates)
+	}
+	if !reflect.DeepEqual(traceGates.RequiredRuntimeSurfaceRefreshReasons, []string{"post_compaction"}) {
+		t.Fatalf("explicit trace-file runtime refresh gate should be preserved: %+v", traceGates)
 	}
 }
 
@@ -1044,6 +1050,7 @@ func TestQualityGateFailures(t *testing.T) {
 		VerifierPassed:                          1,
 		RuntimeErrors:                           3,
 		RuntimeSurfaceScenarios:                 1,
+		RuntimeSurfaceRefreshByReason:           map[string]int{"post_compaction": 1},
 		TraceEventScenarios:                     1,
 		MemoryUpdates:                           1,
 		MemorySearchCalls:                       2,
@@ -1180,6 +1187,7 @@ func TestQualityGateFailures(t *testing.T) {
 		RequiredExpectationCapabilities:                []string{"browser", "delegated_source_evidence"},
 		RequiredExpectationDomains:                     []string{"code_pr", "market"},
 		RequiredTaskStateEvidenceSources:               []string{"git_commit", "git_push"},
+		RequiredRuntimeSurfaceRefreshReasons:           []string{"compact_window_observed", "post_compaction"},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -1232,6 +1240,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"pass_rate 0.500 < min 0.750",
 		"plan_error_rate 0.500 > max 0.250",
 		"runtime_surface_rate 0.500 < min 0.750",
+		"runtime_surface_refresh_reason[compact_window_observed] unavailable, want >= 1 event",
 		"scenario_total_tokens[token-heavy] 250.000 > max 200.000",
 		"trace_event_rate 0.500 < min 0.750",
 		"session_search_context_hit_rate 0.500 < min 0.750",
@@ -5696,13 +5705,20 @@ func TestPrintBatchSummaryJSONLIncludesTaskStateEvidenceGateResult(t *testing.T)
 	var out bytes.Buffer
 	meta := testEvalJSONLMetadata()
 	meta.RequiredTaskStateEvidenceSources = []string{"git_push"}
+	meta.RequiredRuntimeSurfaceRefreshReasons = []string{"compact_window_observed"}
 
 	printBatchSummaryJSONL(&out, meta, batchSummary{
 		Total:                     1,
 		Passed:                    1,
 		EndCompleted:              1,
 		TaskStateEvidenceBySource: map[string]int{"git_commit": 1},
-	}, []string{"task_state_evidence_source[git_push] unavailable, want >= 1 evidence"})
+		RuntimeSurfaceRefreshByReason: map[string]int{
+			"post_compaction": 1,
+		},
+	}, []string{
+		"task_state_evidence_source[git_push] unavailable, want >= 1 evidence",
+		"runtime_surface_refresh_reason[compact_window_observed] unavailable, want >= 1 event",
+	})
 
 	var got map[string]any
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
@@ -5714,6 +5730,10 @@ func TestPrintBatchSummaryJSONLIncludesTaskStateEvidenceGateResult(t *testing.T)
 	sources, ok := got["required_task_state_evidence_sources"].([]any)
 	if !ok || len(sources) != 1 || sources[0] != "git_push" {
 		t.Fatalf("required_task_state_evidence_sources = %#v\njson=%s", got["required_task_state_evidence_sources"], out.String())
+	}
+	reasons, ok := got["required_runtime_surface_refresh_reasons"].([]any)
+	if !ok || len(reasons) != 1 || reasons[0] != "compact_window_observed" {
+		t.Fatalf("required_runtime_surface_refresh_reasons = %#v\njson=%s", got["required_runtime_surface_refresh_reasons"], out.String())
 	}
 }
 
@@ -5806,6 +5826,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	requiredExpectationCapabilities := []string{"delegated_source_evidence", "source_access"}
 	requiredExpectationDomains := []string{"bittensor", "market"}
 	requiredTaskStateEvidenceSources := []string{"git_commit", "git_push"}
+	requiredRuntimeSurfaceRefreshReasons := []string{"compact_window_observed", "post_compaction"}
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                                    &minPassRate,
 		MinMemoryUpdateRate:                            &minMemoryUpdateRate,
@@ -5864,6 +5885,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		RequiredExpectationCapabilities:                requiredExpectationCapabilities,
 		RequiredExpectationDomains:                     requiredExpectationDomains,
 		RequiredTaskStateEvidenceSources:               requiredTaskStateEvidenceSources,
+		RequiredRuntimeSurfaceRefreshReasons:           requiredRuntimeSurfaceRefreshReasons,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
@@ -5890,6 +5912,9 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	}
 	if !reflect.DeepEqual(meta.RequiredTaskStateEvidenceSources, requiredTaskStateEvidenceSources) {
 		t.Fatalf("required task-state evidence source metadata = %#v, want %#v", meta.RequiredTaskStateEvidenceSources, requiredTaskStateEvidenceSources)
+	}
+	if !reflect.DeepEqual(meta.RequiredRuntimeSurfaceRefreshReasons, requiredRuntimeSurfaceRefreshReasons) {
+		t.Fatalf("required runtime surface refresh reason metadata = %#v, want %#v", meta.RequiredRuntimeSurfaceRefreshReasons, requiredRuntimeSurfaceRefreshReasons)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
 		t.Fatalf("disabled quality gate metadata should be omitted: %+v", meta)

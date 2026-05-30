@@ -221,6 +221,7 @@ func run(args []string) int {
 		expectationCapGates                       stringSetFlag
 		expectationDomainGates                    stringSetFlag
 		taskStateEvidenceSourceGates              stringSetFlag
+		runtimeSurfaceRefreshReasonGates          stringSetFlag
 		expectationDomainMinVerifiedGates         stringFloatMapFlag
 		expectationDomainMaxAvgTokensGates        stringFloatMapFlag
 		expectationDomainMaxAvgToolCallsGates     stringFloatMapFlag
@@ -323,6 +324,7 @@ func run(args []string) int {
 	fs.Var(&expectationCapGates, "require-expectation-capability", "optional repeatable quality gate: require at least one scenario declaring this expectation capability; accepts comma-separated values")
 	fs.Var(&expectationDomainGates, "require-expectation-domain", "optional repeatable quality gate: require at least one scenario declaring this task domain; accepts comma-separated values")
 	fs.Var(&taskStateEvidenceSourceGates, "require-task-state-evidence-source", "optional repeatable quality gate: require at least one TaskState evidence item from this source; accepts comma-separated values")
+	fs.Var(&runtimeSurfaceRefreshReasonGates, "require-runtime-surface-refresh-reason", "optional repeatable quality gate: require at least one runtime.surface event with this refresh_reason; accepts comma-separated values")
 	fs.Var(&expectationDomainMinVerifiedGates, "min-expectation-domain-source-access-verified-rate", "optional repeatable quality gate: minimum verified SourceAccess rate for a task domain, as domain=rate")
 	fs.Var(&expectationDomainMaxAvgTokensGates, "max-expectation-domain-avg-total-tokens", "optional repeatable quality gate: maximum average total tokens for a task domain, as domain=tokens")
 	fs.Var(&expectationDomainMaxAvgToolCallsGates, "max-expectation-domain-avg-tool-calls", "optional repeatable quality gate: maximum average tool calls for a task domain, as domain=count")
@@ -353,6 +355,9 @@ success and trace-level process quality.`)
 	}
 	if len(taskStateEvidenceSourceGates) > 0 {
 		gates.RequiredTaskStateEvidenceSources = taskStateEvidenceSourceGates.values()
+	}
+	if len(runtimeSurfaceRefreshReasonGates) > 0 {
+		gates.RequiredRuntimeSurfaceRefreshReasons = runtimeSurfaceRefreshReasonGates.values()
 	}
 	if len(expectationDomainMinVerifiedGates) > 0 {
 		gates.MinExpectationDomainSourceAccessVerifiedRates = expectationDomainMinVerifiedGates.clone()
@@ -675,6 +680,7 @@ type qualityGateConfig struct {
 	RequiredExpectationCapabilities                []string
 	RequiredExpectationDomains                     []string
 	RequiredTaskStateEvidenceSources               []string
+	RequiredRuntimeSurfaceRefreshReasons           []string
 }
 
 type qualityGateProfileDefinition struct {
@@ -926,6 +932,9 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	if len(g.RequiredTaskStateEvidenceSources) > 0 {
 		lines = append(lines, fmt.Sprintf("require-task-state-evidence-source=%s", strings.Join(g.RequiredTaskStateEvidenceSources, ",")))
 	}
+	if len(g.RequiredRuntimeSurfaceRefreshReasons) > 0 {
+		lines = append(lines, fmt.Sprintf("require-runtime-surface-refresh-reason=%s", strings.Join(g.RequiredRuntimeSurfaceRefreshReasons, ",")))
+	}
 	return lines
 }
 
@@ -1044,6 +1053,13 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 		}
 		g.RequiredTaskStateEvidenceSources = uniqueSortedStrings(profileSources)
 	}
+	if len(profileConfig.RequiredRuntimeSurfaceRefreshReasons) > 0 {
+		profileReasons := cloneStringSlice(profileConfig.RequiredRuntimeSurfaceRefreshReasons)
+		if flagSet != nil && flagSet("require-runtime-surface-refresh-reason") {
+			profileReasons = append(profileReasons, g.RequiredRuntimeSurfaceRefreshReasons...)
+		}
+		g.RequiredRuntimeSurfaceRefreshReasons = uniqueSortedStrings(profileReasons)
+	}
 	return nil
 }
 
@@ -1057,6 +1073,9 @@ func qualityGateConfigForTraceFile(g qualityGateConfig, flagSet func(name string
 	}
 	if flagSet == nil || !flagSet("require-task-state-evidence-source") {
 		out.RequiredTaskStateEvidenceSources = nil
+	}
+	if flagSet == nil || !flagSet("require-runtime-surface-refresh-reason") {
+		out.RequiredRuntimeSurfaceRefreshReasons = nil
 	}
 	if flagSet == nil || !flagSet("min-expectation-capability-pass-rate") {
 		out.MinExpectationCapabilityPassRate = nil
@@ -2756,6 +2775,11 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 			return fmt.Errorf("--require-task-state-evidence-source value must be non-empty")
 		}
 	}
+	for _, reason := range g.RequiredRuntimeSurfaceRefreshReasons {
+		if strings.TrimSpace(reason) == "" {
+			return fmt.Errorf("--require-runtime-surface-refresh-reason value must be non-empty")
+		}
+	}
 	return nil
 }
 
@@ -2838,6 +2862,11 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	for _, source := range g.RequiredTaskStateEvidenceSources {
 		if s.TaskStateEvidenceBySource[source] == 0 {
 			failures = append(failures, fmt.Sprintf("task_state_evidence_source[%s] unavailable, want >= 1 evidence", source))
+		}
+	}
+	for _, reason := range g.RequiredRuntimeSurfaceRefreshReasons {
+		if s.RuntimeSurfaceRefreshByReason[reason] == 0 {
+			failures = append(failures, fmt.Sprintf("runtime_surface_refresh_reason[%s] unavailable, want >= 1 event", reason))
 		}
 	}
 	failures = append(failures, expectationDomainMetricGateFailures(s, g)...)
@@ -4045,6 +4074,7 @@ type evalJSONLMetadata struct {
 	RequiredExpectationCapabilities                []string           `json:"required_expectation_capabilities,omitempty"`
 	RequiredExpectationDomains                     []string           `json:"required_expectation_domains,omitempty"`
 	RequiredTaskStateEvidenceSources               []string           `json:"required_task_state_evidence_sources,omitempty"`
+	RequiredRuntimeSurfaceRefreshReasons           []string           `json:"required_runtime_surface_refresh_reasons,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -4135,6 +4165,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		RequiredExpectationCapabilities:                cloneStringSlice(gates.RequiredExpectationCapabilities),
 		RequiredExpectationDomains:                     cloneStringSlice(gates.RequiredExpectationDomains),
 		RequiredTaskStateEvidenceSources:               cloneStringSlice(gates.RequiredTaskStateEvidenceSources),
+		RequiredRuntimeSurfaceRefreshReasons:           cloneStringSlice(gates.RequiredRuntimeSurfaceRefreshReasons),
 	}
 }
 
@@ -5294,7 +5325,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		len(meta.MaxExpectationDomainLoopGuardInterventionRates) > 0 ||
 		len(meta.RequiredExpectationCapabilities) > 0 ||
 		len(meta.RequiredExpectationDomains) > 0 ||
-		len(meta.RequiredTaskStateEvidenceSources) > 0
+		len(meta.RequiredTaskStateEvidenceSources) > 0 ||
+		len(meta.RequiredRuntimeSurfaceRefreshReasons) > 0
 }
 
 func expectationCapabilityPassRates(total, passed map[string]int) map[string]float64 {

@@ -116,6 +116,10 @@ Shared metadata fields:
   sources that must appear at least once in the batch summary. Use this when a
   run must prove concrete completion facts such as `git_commit` or `git_push`
   through the canonical task-state snapshot rather than final-message text.
+- `required_runtime_surface_refresh_reasons`: optional list of
+  `runtime.surface.refresh_reason` values that must appear at least once in the
+  batch summary. This lets long-run suites require structural runtime refresh
+  facts such as `post_compaction` or `compact_window_observed`.
 
 ## Scenario Record
 
@@ -816,6 +820,8 @@ Summary records aggregate all scenario records from the same process:
   `--require-task-state-evidence-source` gates structural TaskState evidence
   after the run, so code/PR or deployment batches can require sources such as
   `git_commit` and `git_push` without matching natural-language output.
+  `--require-runtime-surface-refresh-reason` similarly gates runtime-surface
+  lifecycle facts such as `post_compaction` and `compact_window_observed`.
 - Quality gate outcome: `quality_profile` identifies any built-in profile used,
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and
