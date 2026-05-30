@@ -299,6 +299,8 @@ func Clamp(v, min, max int) int {
 
 	deadline := time.After(15 * time.Second)
 	workspaceSet := false
+	sawWorkspaceResult := false
+	sawWorkspaceSurface := false
 	sawFailedTest := false
 	sawPassedTest := false
 	sawCommitPush := false
@@ -328,6 +330,11 @@ func Clamp(v, min, max int) int {
 					t.Fatalf("decode tool.result: %v", err)
 				}
 				switch p.CallID {
+				case "workspace_app":
+					if !strings.Contains(p.Result, `"workspace_path": "app"`) || !strings.Contains(p.Result, `"changed": true`) {
+						t.Fatalf("workspace switch result missing active workspace details:\n%s", p.Result)
+					}
+					sawWorkspaceResult = true
 				case "test_fail":
 					if !strings.Contains(p.Result, "[exit 1]") || !strings.Contains(p.Result, "FAIL") {
 						t.Fatalf("initial go test should fail before the fix: %s", p.ResultSummary)
@@ -344,6 +351,21 @@ func Clamp(v, min, max int) int {
 					}
 					sawCommitPush = true
 				}
+			case sse.TypeRuntimeSurface:
+				var p sse.RuntimeSurfacePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode runtime.surface: %v", err)
+				}
+				if p.RefreshReason != sse.RuntimeSurfaceRefreshWorkspaceChanged {
+					continue
+				}
+				if !sawWorkspaceResult {
+					t.Fatal("runtime surface refreshed for workspace before the workspace tool result was visible")
+				}
+				if p.Workspace == nil || p.Workspace.WorkspacePath != "app" || p.Workspace.WorkspaceLabel != "app" {
+					t.Fatalf("workspace refresh surface = %+v, want active app workspace", p.Workspace)
+				}
+				sawWorkspaceSurface = true
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -355,8 +377,8 @@ func Clamp(v, min, max int) int {
 				if p.Reason != sse.TurnEndCompleted {
 					t.Fatalf("turn end reason = %q, want completed", p.Reason)
 				}
-				if !workspaceSet || !sawFailedTest || !sawPassedTest || !sawCommitPush {
-					t.Fatalf("workflow evidence missing: workspace=%v failed_test=%v passed_test=%v commit_push=%v", workspaceSet, sawFailedTest, sawPassedTest, sawCommitPush)
+				if !workspaceSet || !sawWorkspaceResult || !sawWorkspaceSurface || !sawFailedTest || !sawPassedTest || !sawCommitPush {
+					t.Fatalf("workflow evidence missing: workspace=%v workspace_result=%v workspace_surface=%v failed_test=%v passed_test=%v commit_push=%v", workspaceSet, sawWorkspaceResult, sawWorkspaceSurface, sawFailedTest, sawPassedTest, sawCommitPush)
 				}
 				assertClampRemotePushed(t, remote)
 				if sess.Workspace() != filepath.Join(sess.workspaceRoot(), "app") {

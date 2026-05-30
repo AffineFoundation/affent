@@ -117,6 +117,7 @@ type RuntimeSurfacePayload struct {
 
 const (
 	RuntimeSurfaceRefreshCompactWindowObserved = "compact_window_observed"
+	RuntimeSurfaceRefreshWorkspaceChanged      = "workspace_changed"
 )
 
 type RuntimeWorkspace struct {

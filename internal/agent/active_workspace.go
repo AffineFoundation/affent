@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 const (
@@ -322,9 +324,10 @@ func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 		}
 	}`)
 	return &Tool{
-		Name:        SessionWorkspaceToolName,
-		Description: "Inspect or switch this session's active workspace. Use action=set after creating or cloning a project directory so later shell/file/search tools default to that project. The path must be an existing directory inside the configured workspace root.",
-		Schema:      schema,
+		Name:                  SessionWorkspaceToolName,
+		Description:           "Inspect or switch this session's active workspace. Use action=set after creating or cloning a project directory so later shell/file/search tools default to that project. The path must be an existing directory inside the configured workspace root.",
+		Schema:                schema,
+		RuntimeSurfaceRefresh: sessionWorkspaceRuntimeSurfaceRefresh,
 		Execute: func(_ context.Context, args json.RawMessage) (string, error) {
 			var req struct {
 				Action string `json:"action"`
@@ -419,6 +422,24 @@ func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 			return string(raw), nil
 		},
 		CatalogGroup: "Core",
+	}
+}
+
+func sessionWorkspaceRuntimeSurfaceRefresh(args json.RawMessage, _ string, isErr bool) string {
+	if isErr {
+		return ""
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return ""
+	}
+	switch strings.TrimSpace(req.Action) {
+	case "set", "reset":
+		return sse.RuntimeSurfaceRefreshWorkspaceChanged
+	default:
+		return ""
 	}
 }
 

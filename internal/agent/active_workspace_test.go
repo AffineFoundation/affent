@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestSessionWorkspaceToolSwitchesActiveWorkspace(t *testing.T) {
@@ -50,6 +52,22 @@ func TestSessionWorkspaceToolSwitchesActiveWorkspace(t *testing.T) {
 		!strings.Contains(out, `"workspace_root": "."`) ||
 		!strings.Contains(out, `"workspace_path": "."`) {
 		t.Fatalf("reset output should expose workspace-relative root:\n%s", out)
+	}
+}
+
+func TestSessionWorkspaceToolDeclaresRuntimeSurfaceRefresh(t *testing.T) {
+	tool := SessionWorkspaceTool(NewActiveWorkspaceState("sess-workspace", t.TempDir(), "", false, nil))
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"set","path":"app"}`), `{}`, false); got != sse.RuntimeSurfaceRefreshWorkspaceChanged {
+		t.Fatalf("set refresh = %q, want %q", got, sse.RuntimeSurfaceRefreshWorkspaceChanged)
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"reset"}`), `{}`, false); got != sse.RuntimeSurfaceRefreshWorkspaceChanged {
+		t.Fatalf("reset refresh = %q, want %q", got, sse.RuntimeSurfaceRefreshWorkspaceChanged)
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"inspect"}`), `{}`, false); got != "" {
+		t.Fatalf("inspect refresh = %q, want empty", got)
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"set","path":"app"}`), `Error: no`, true); got != "" {
+		t.Fatalf("failed set refresh = %q, want empty", got)
 	}
 }
 

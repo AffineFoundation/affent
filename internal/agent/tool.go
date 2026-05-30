@@ -29,14 +29,15 @@ const SessionWorkspaceToolName = "session_workspace"
 // emits a tool_call. The schema is JSON Schema served verbatim to the
 // model alongside the tool name and description.
 type Tool struct {
-	Name           string
-	Description    string
-	Schema         json.RawMessage // JSON Schema for the function arguments
-	NormalizeArgs  func(args json.RawMessage) (json.RawMessage, bool, []string)
-	Execute        func(ctx context.Context, args json.RawMessage) (string, error)
-	CatalogGroup   string
-	CatalogSource  string
-	CatalogRawName string
+	Name                  string
+	Description           string
+	Schema                json.RawMessage // JSON Schema for the function arguments
+	NormalizeArgs         func(args json.RawMessage) (json.RawMessage, bool, []string)
+	Execute               func(ctx context.Context, args json.RawMessage) (string, error)
+	RuntimeSurfaceRefresh func(args json.RawMessage, result string, isErr bool) string
+	CatalogGroup          string
+	CatalogSource         string
+	CatalogRawName        string
 }
 
 // ToolCatalogEntry is the read-only catalog shape exposed to the UI.

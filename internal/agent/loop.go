@@ -1920,6 +1920,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			omitted := l.publishAndAppendToolResultWithContextMeta(turnID, callID, toolName, result, isErr, toolDuration, delegation, toolContextBudget, memoryUpdate)
 			recordContextOmission(omitted)
+			l.publishRuntimeSurfaceAfterTool(turnID, opts, dispatchTool, args, result, isErr)
 			if l.loopProtocolStartSetupCreatedDraft(toolName, args, isErr) {
 				opts.ForceLoopCalibrationQuestion = true
 				opts.FinalNoToolsOnMaxTurns = true
@@ -3127,6 +3128,22 @@ func (l *Loop) publish(t string, payload any) {
 
 func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 	l.publishRuntimeSurfaceWithReason(turnID, opts, "turn_start")
+}
+
+func (l *Loop) publishRuntimeSurfaceAfterTool(turnID string, opts TurnOptions, tool *Tool, args json.RawMessage, result string, isErr bool) {
+	if tool == nil || tool.RuntimeSurfaceRefresh == nil {
+		return
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			l.Log.Warn().Interface("panic", rec).Str("tool", tool.Name).Msg("runtime surface refresh hook panicked")
+		}
+	}()
+	reason := strings.TrimSpace(tool.RuntimeSurfaceRefresh(args, result, isErr))
+	if reason == "" {
+		return
+	}
+	l.publishRuntimeSurfaceWithReason(turnID, opts, reason)
 }
 
 func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, reason string) {
