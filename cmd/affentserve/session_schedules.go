@@ -559,7 +559,7 @@ func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSum
 }
 
 func summarizeSessionSchedulesForSession(pool *SessionPool, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
-	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunning(pool, sessionID))
+	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopTickRunnable(pool, sessionID))
 }
 
 func summarizeSessionSchedulesForDir(sessionDir, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
@@ -682,7 +682,7 @@ func validateSessionScheduleKindForSession(pool *SessionPool, sessionID, kind st
 	if kind != sessionScheduleKindLoopTick {
 		return nil
 	}
-	if sessionLoopProtocolRunning(pool, sessionID) {
+	if sessionLoopTickRunnable(pool, sessionID) {
 		return nil
 	}
 	return errors.New(sessionScheduleLoopTickUnavailableMessage())
@@ -835,7 +835,7 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 		if !schedule.Enabled || !sessionScheduleDue(*schedule, now) {
 			continue
 		}
-		if schedule.Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(p, sessionID) {
+		if schedule.Kind == sessionScheduleKindLoopTick && !sessionLoopTickRunnable(p, sessionID) {
 			markSessionScheduleLoopTickUnavailable(schedule, now)
 			updated = true
 			continue
@@ -872,7 +872,24 @@ func markSessionScheduleLoopTickUnavailable(schedule *sessionSchedule, now time.
 }
 
 func sessionScheduleLoopTickUnavailableMessage() string {
-	return "loop_tick requires a running LOOP.md; activate the loop first, or use custom/checkin/daily_checkin for ordinary timers and recurring checks"
+	return "loop_tick requires loop protocol runtime support and a running LOOP.md; enable loop_protocol and activate the loop first, or use custom/checkin/daily_checkin for ordinary timers and recurring checks"
+}
+
+func sessionLoopTickRunnable(pool *SessionPool, sessionID string) bool {
+	return sessionLoopTickSupported(pool) && sessionLoopProtocolRunning(pool, sessionID)
+}
+
+func sessionLoopTickSupported(pool *SessionPool) bool {
+	if pool == nil {
+		return false
+	}
+	if pool.cfg.EvalMode {
+		return false
+	}
+	if pool.cfg.enableLoopProtocolSet && !pool.cfg.EnableLoopProtocol {
+		return false
+	}
+	return true
 }
 
 func sessionLoopProtocolRunning(pool *SessionPool, sessionID string) bool {

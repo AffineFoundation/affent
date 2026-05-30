@@ -367,6 +367,40 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickWhenStateStillDraft
 	}
 }
 
+func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickWhenRuntimeDisabled(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
+	pool.cfg.EnableLoopProtocol = false
+	pool.cfg.enableLoopProtocolSet = true
+	createDurableSessionDir(t, pool, "disabled-loop-runtime")
+	writeLoopProtocolStatusFixture(t, pool, "disabled-loop-runtime", "running")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "disabled-loop-runtime", sessionSchedule{
+		ID:                    "sched_loop",
+		Kind:                  sessionScheduleKindLoopTick,
+		Prompt:                "Scheduled loop tick for disabled runtime",
+		Enabled:               true,
+		NextRunAt:             now.Add(-time.Minute).Format(time.RFC3339),
+		RepeatIntervalSeconds: 1800,
+		CreatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
+	}
+	schedule := waitSchedule(t, pool, "disabled-loop-runtime", "sched_loop", func(schedule sessionSchedule) bool {
+		return schedule.LastError != ""
+	})
+	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, "loop protocol runtime support") {
+		t.Fatalf("schedule = %+v, want paused loop_tick while loop runtime is disabled", schedule)
+	}
+	summary := summarizeSessionSchedulesForSession(pool, "disabled-loop-runtime", []sessionSchedule{schedule})
+	if summary.EnabledLoopTicks != 0 || summary.PendingLoopTicks != 0 {
+		t.Fatalf("summary = %+v, want disabled loop tick excluded from pending counts", summary)
+	}
+}
+
 func TestSessionPool_RunDueSessionSchedulesOncePausesOneShotLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
@@ -558,6 +592,36 @@ func TestCreateSessionScheduleLoopTickRequiresRunningProtocol(t *testing.T) {
 	}
 	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "direct-loop-missing")); err != nil || found {
 		t.Fatalf("read loop protocol found=%v err=%v, want no protocol created", found, err)
+	}
+}
+
+func TestCreateSessionScheduleLoopTickRequiresLoopProtocolRuntime(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableLoopProtocol = false
+	pool.cfg.enableLoopProtocolSet = true
+	createDurableSessionDir(t, pool, "direct-loop-disabled")
+	writeLoopProtocolStatusFixture(t, pool, "direct-loop-disabled", "running")
+	next := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC).Format(time.RFC3339)
+	body := `{
+		"kind":"loop_tick",
+		"prompt":"Scheduled loop tick for session: direct API",
+		"display_text":"Loop every 30m: direct API",
+		"next_run_at":` + strconv.Quote(next) + `,
+		"repeat_interval_seconds":1800,
+		"enabled":true
+	}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/direct-loop-disabled/schedules", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	handleSessionSchedules(pool, "direct-loop-disabled", w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("create schedule status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "loop protocol runtime support") {
+		t.Fatalf("create loop_tick error missing runtime support guidance: %s", w.Body.String())
+	}
+	if _, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "direct-loop-disabled")); err != nil || found {
+		t.Fatalf("schedules found=%v err=%v, want no schedule persisted", found, err)
 	}
 }
 
