@@ -484,27 +484,54 @@ func rejectUnusedSkillArgs(action string, present map[string]bool) error {
 }
 
 func skillProposalPreparedMessage(proposal RuntimeSkillProposal) string {
-	triggerSummary := "none"
-	if len(proposal.AutoActivation.Any) > 0 {
-		triggerSummary = strings.Join(proposal.AutoActivation.Any, ", ")
-	}
-	return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d body_sha256=%s\n\nReview this proposal with the user and ask for explicit confirmation before installing. If the preview is insufficient, call skill with action=review_proposal and proposal_id=%q to inspect the exact pending body. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.BodySHA256, proposal.ID, proposal.ID, textutil.Preview(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent))
+	return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s auto_activates=%t activation=%s required_tools=%s body_bytes=%d body_sha256=%s\n\nReview this proposal with the user and ask for explicit confirmation before installing. If the preview is insufficient, call skill with action=review_proposal and proposal_id=%q to inspect the exact pending body. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, proposal.AutoActivation.hasRules(), skillActivationSummary(proposal.AutoActivation, nil, false), skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.BodySHA256, proposal.ID, proposal.ID, textutil.Preview(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent))
 }
 
 func skillProposalReviewMessage(proposal RuntimeSkillProposal) string {
-	triggerSummary := "none"
-	if len(proposal.AutoActivation.Any) > 0 {
-		triggerSummary = strings.Join(proposal.AutoActivation.Any, ", ")
-	}
-	return fmt.Sprintf("pending skill proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d body_sha256=%s\n\nbody:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.BodySHA256, strings.TrimSpace(proposal.Body))
+	return fmt.Sprintf("pending skill proposal_id=%s name=%q source=%s auto_activates=%t activation=%s required_tools=%s body_bytes=%d body_sha256=%s\n\nbody:\n%s", proposal.ID, proposal.Name, proposal.Source, proposal.AutoActivation.hasRules(), skillActivationSummary(proposal.AutoActivation, nil, false), skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.BodySHA256, strings.TrimSpace(proposal.Body))
 }
 
 func skillInstallSuccessMessage(installed Skill, runtimeTools *Registry) string {
-	triggerSummary := "none"
-	if len(installed.AutoActivation.Any) > 0 {
-		triggerSummary = strings.Join(installed.AutoActivation.Any, ", ")
+	return fmt.Sprintf("installed skill %q active_now=%t auto_activates=%t source=%s activation=%s required_tools=%s missing_required_tools=%s\n\n%s", installed.Name, skillActiveNow(installed, runtimeTools), installed.HasActivationRules(), installed.Source, skillActivationSummary(installed.AutoActivation, installed.Triggers, installed.Match != nil), skillRequiredToolsSummary(installed.RequiredTools), skillMissingRequiredToolsSummary(installed, runtimeTools), strings.TrimSpace(installed.Body))
+}
+
+func skillActivationSummary(auto SkillAutoActivation, triggers []string, hasMatch bool) string {
+	parts := []string{}
+	if hasMatch {
+		parts = append(parts, "custom_match")
 	}
-	return fmt.Sprintf("installed skill %q active_now=%t source=%s triggers=%s required_tools=%s missing_required_tools=%s\n\n%s", installed.Name, skillActiveNow(installed, runtimeTools), installed.Source, triggerSummary, skillRequiredToolsSummary(installed.RequiredTools), skillMissingRequiredToolsSummary(installed, runtimeTools), strings.TrimSpace(installed.Body))
+	if any := compactNonEmptyStrings(auto.Any); len(any) > 0 {
+		parts = append(parts, "any("+strings.Join(any, ", ")+")")
+	}
+	allAnyOnly := SkillAutoActivation{AllAny: auto.AllAny}
+	if allAnyOnly.hasRules() {
+		groups := make([]string, 0, len(auto.AllAny))
+		for _, group := range auto.AllAny {
+			if values := compactNonEmptyStrings(group); len(values) > 0 {
+				groups = append(groups, strings.Join(values, "|"))
+			}
+		}
+		if len(groups) > 0 {
+			parts = append(parts, "all_any("+strings.Join(groups, " + ")+")")
+		}
+	}
+	if legacy := compactNonEmptyStrings(triggers); len(legacy) > 0 {
+		parts = append(parts, "legacy_triggers("+strings.Join(legacy, ", ")+")")
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, "; ")
+}
+
+func compactNonEmptyStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func skillRequiredToolsSummary(requiredTools []string) string {

@@ -138,14 +138,26 @@ const (
 )
 
 func (a SkillAutoActivation) hasRules() bool {
-	return len(a.Any) > 0 || len(a.AllAny) > 0
+	if hasNonEmptyString(a.Any) {
+		return true
+	}
+	if len(a.AllAny) == 0 {
+		return false
+	}
+	for _, group := range a.AllAny {
+		if !hasNonEmptyString(group) {
+			return false
+		}
+	}
+	return true
 }
 
 func (a SkillAutoActivation) matches(lowerUserText string) bool {
 	if containsAny(lowerUserText, a.Any) {
 		return true
 	}
-	if len(a.AllAny) == 0 {
+	allAnyOnly := SkillAutoActivation{AllAny: a.AllAny}
+	if !allAnyOnly.hasRules() {
 		return false
 	}
 	for _, group := range a.AllAny {
@@ -154,6 +166,15 @@ func (a SkillAutoActivation) matches(lowerUserText string) bool {
 		}
 	}
 	return true
+}
+
+func hasNonEmptyString(values []string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // SkillRegistry is an ordered set of skills. The router iterates in
@@ -1127,6 +1148,9 @@ func validateSkillAutoActivation(a SkillAutoActivation) error {
 		return fmt.Errorf("skill auto_activation.all_any has %d groups; max %d", len(a.AllAny), maxRuntimeSkillTriggers)
 	}
 	for _, group := range a.AllAny {
+		if !hasNonEmptyString(group) {
+			return fmt.Errorf("skill auto_activation.all_any group must not be empty")
+		}
 		if len(group) > maxRuntimeSkillTriggers {
 			return fmt.Errorf("skill auto_activation.all_any group has %d entries; max %d", len(group), maxRuntimeSkillTriggers)
 		}

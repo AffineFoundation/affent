@@ -2146,9 +2146,11 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "reviewed_demo", "SKILL.md")); !os.IsNotExist(err) {
 		t.Fatalf("proposed skill should not be installed yet, stat err=%v", err)
 	}
-	if !strings.Contains(out, "body_sha256="+runtimeSkillBodySHA256(body)) ||
+	if !strings.Contains(out, "auto_activates=true") ||
+		!strings.Contains(out, "activation=any(reviewed demo)") ||
+		!strings.Contains(out, "body_sha256="+runtimeSkillBodySHA256(body)) ||
 		!strings.Contains(out, "action=review_proposal") {
-		t.Fatalf("proposal output should expose digest and review action:\n%s", out)
+		t.Fatalf("proposal output should expose activation, digest, and review action:\n%s", out)
 	}
 
 	reviewArgs, err := json.Marshal(map[string]any{
@@ -2163,9 +2165,11 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 		t.Fatalf("skill review_proposal: %v", err)
 	}
 	if !strings.Contains(review, "pending skill proposal_id="+proposalID) ||
+		!strings.Contains(review, "auto_activates=true") ||
+		!strings.Contains(review, "activation=any(reviewed demo)") ||
 		!strings.Contains(review, "body_sha256="+runtimeSkillBodySHA256(body)) ||
 		!strings.Contains(review, body) {
-		t.Fatalf("review_proposal should expose exact pending body and digest:\n%s", review)
+		t.Fatalf("review_proposal should expose activation, exact pending body, and digest:\n%s", review)
 	}
 
 	confirmArgs, err := json.Marshal(map[string]any{
@@ -2184,6 +2188,8 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 		t.Fatalf("skill confirm_install: %v", err)
 	}
 	if !strings.Contains(confirmed, `installed skill "reviewed_demo"`) ||
+		!strings.Contains(confirmed, `auto_activates=true`) ||
+		!strings.Contains(confirmed, `activation=any(reviewed demo)`) ||
 		!strings.Contains(confirmed, `source=https://github.com/example/skills/reviewed_demo`) ||
 		!strings.Contains(confirmed, body) {
 		t.Fatalf("confirm output should install and expose body:\n%s", confirmed)
@@ -2193,6 +2199,43 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".pending", proposalID+".json")); !os.IsNotExist(err) {
 		t.Fatalf("confirmed proposal should be removed, stat err=%v", err)
+	}
+}
+
+func TestSkillToolMessagesExposeStructuredActivationRules(t *testing.T) {
+	body := "AFFENT ACTIVE SKILL: structured_demo\nUse this structured workflow."
+	proposal := RuntimeSkillProposal{
+		ID:         "0123456789abcdef",
+		Name:       "structured_demo",
+		Source:     "https://github.com/example/skills/tree/main/structured_demo",
+		Body:       body,
+		BodySHA256: runtimeSkillBodySHA256(body),
+		AutoActivation: SkillAutoActivation{
+			AllAny: [][]string{{"fix", "repair"}, {"test"}},
+		},
+	}
+	prepared := skillProposalPreparedMessage(proposal)
+	if !strings.Contains(prepared, "auto_activates=true") ||
+		!strings.Contains(prepared, "activation=all_any(fix|repair + test)") ||
+		strings.Contains(prepared, "activation=none") {
+		t.Fatalf("prepared proposal should expose structured activation:\n%s", prepared)
+	}
+	review := skillProposalReviewMessage(proposal)
+	if !strings.Contains(review, "auto_activates=true") ||
+		!strings.Contains(review, "activation=all_any(fix|repair + test)") ||
+		!strings.Contains(review, body) {
+		t.Fatalf("proposal review should expose structured activation:\n%s", review)
+	}
+	installed := Skill{
+		Name:           proposal.Name,
+		Source:         proposal.Source,
+		Body:           proposal.Body,
+		AutoActivation: proposal.AutoActivation,
+	}
+	confirmed := skillInstallSuccessMessage(installed, nil)
+	if !strings.Contains(confirmed, "auto_activates=true") ||
+		!strings.Contains(confirmed, "activation=all_any(fix|repair + test)") {
+		t.Fatalf("install message should expose structured activation:\n%s", confirmed)
 	}
 }
 

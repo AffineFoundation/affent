@@ -782,6 +782,33 @@ func TestSkillRegistry_CatalogAutoActivatesOnlyWithActivationRules(t *testing.T)
 	}
 }
 
+func TestSkillAutoActivationRejectsEmptyAllAnyGroup(t *testing.T) {
+	reg := &SkillRegistry{}
+	reg.Register(Skill{
+		Name: "empty_group",
+		Body: "AFFENT ACTIVE SKILL: empty_group\nbody",
+		AutoActivation: SkillAutoActivation{
+			AllAny: [][]string{{}, {"repo"}},
+		},
+	})
+	if got := reg.Provide("repo task"); got != "" {
+		t.Fatalf("empty all_any group must not activate, got %q", got)
+	}
+	catalog := reg.Catalog()
+	if len(catalog) != 1 || catalog[0].AutoActivates {
+		t.Fatalf("catalog entry = %+v, want non-auto-activating", catalog)
+	}
+	if _, err := InstallRuntimeSkill(t.TempDir(), Skill{
+		Name: "empty_group",
+		Body: "AFFENT ACTIVE SKILL: empty_group\nbody",
+		AutoActivation: SkillAutoActivation{
+			AllAny: [][]string{{}, {"repo"}},
+		},
+	}); err == nil || !strings.Contains(err.Error(), "all_any group must not be empty") {
+		t.Fatalf("InstallRuntimeSkill empty all_any err = %v", err)
+	}
+}
+
 // TestSkillRegistry_CustomMatchPredicate pins the Match override
 // path. Trigger lists handle "any-of substring" cases; some skills
 // need a real predicate (regex, length floor, multi-signal AND).
