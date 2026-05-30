@@ -3982,7 +3982,8 @@ func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 		EnableLoopProtocol: true,
 		Prompts: []string{
 			"Iteration 1: build the initial Python project from this nearly empty repository. Use the active loop protocol as durable task state. Create stdlib unittest coverage in tests/test_store.py before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark items done, list all items, and list open items through open_items(). Run " + pythonUnittestDiscoverCommand + " once after creating tests and again after implementation. Update README.md with the usage summary and marker ITER-LOOP-57. Commit iteration 1, push it to origin main, and leave git status clean. The final answer for this turn must include ITER-LOOP-57, iteration 1, the test command, created files, commit hash, and push result.",
-			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence in tests/test_store.py, update README.md with the persistence usage, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
+			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence under tests/, update README.md with the persistence usage, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
+			"Recovery turn: continue the same scratch-project-iterative-loop after any prior budget boundary. Do not restart the project or redo completed iteration 1. Recover the remaining state from the persisted loop protocol, plan, trace/task evidence, git status, and workspace files. Finish any missing iteration 2 implementation, tests, README update, verification, second commit, second push, clean status check, and loop closure. Close the loop protocol as completed only after " + pythonUnittestDiscoverCommand + " passes and origin main contains the second commit. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, second commit hash, push result, clean status, and completed loop status.",
 		},
 		Files: map[string]string{
 			".affent/loops/scratch-project-iterative-loop/LOOP.md": `# Loop Protocol: scratch-project-iterative-loop
@@ -3992,6 +3993,7 @@ func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 - loop_id: scratch-project-iterative-loop
 - owner_session: scratch-project-iterative-loop
 - status: running
+- finalization_policy: require_close_before_final
 
 ## 1. North Star
 
@@ -4035,8 +4037,8 @@ This repository starts almost empty. The agent must create the project over two 
 			`grep -R "class TodoStore" todo_core/store.py`,
 			`grep -R "def save_json" todo_core/store.py`,
 			`grep -R "def load_json" todo_core/store.py`,
-			`grep -R "save_json" tests/test_store.py`,
-			`grep -R "load_json" tests/test_store.py`,
+			`grep -R "save_json" tests`,
+			`grep -R "load_json" tests`,
 			`grep -R "ITER-LOOP-57" README.md`,
 			`grep -R "JSON" README.md`,
 		),
@@ -4080,14 +4082,15 @@ This repository starts almost empty. The agent must create the project over two 
 			{Source: "git_commit"},
 			{Source: "git_push"},
 		},
-		RequiredLoopProtocolFeeds: 2,
+		RequiredLoopProtocolFeeds:       1,
+		RequiredLoopProtocolFinalStatus: "completed",
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
+			"loop_protocol_running",
 			agent.WorkspaceVerificationFreshnessGuardLabel,
 		},
 		RequiredLoopProtocolFeedModes: map[string]int{
-			"full":   1,
-			"digest": 1,
+			"full": 1,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{
@@ -4121,8 +4124,6 @@ This repository starts almost empty. The agent must create the project over two 
 				"unittest",
 				"mark_done",
 				"open_items",
-				"save_json",
-				"load_json",
 			},
 			"README.md": {
 				"ITER-LOOP-57",

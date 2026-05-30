@@ -2612,7 +2612,10 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 		err := runEvalCommand(ctx, cmd)
 		lastExit = exitCodeFromError(err)
 		if err != nil {
-			return stdout.String(), stderr.String(), lastExit, redactedCommand, err
+			if ctx.Err() != nil || idx == len(prompts)-1 {
+				return stdout.String(), stderr.String(), lastExit, redactedCommand, err
+			}
+			continue
 		}
 	}
 	return stdout.String(), stderr.String(), lastExit, redactedCommand, nil

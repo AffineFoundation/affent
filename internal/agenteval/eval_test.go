@@ -620,6 +620,52 @@ func TestBatchRunnerRejectsMultiTurnWithoutSessionID(t *testing.T) {
 	}
 }
 
+func TestRunAffentctlContinuesAfterIntermediatePromptError(t *testing.T) {
+	dir := t.TempDir()
+	fakeGo := filepath.Join(dir, "fake-go")
+	logPath := filepath.Join(dir, "calls.log")
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "` + logPath + `"
+case "$*" in
+  *"first fails"*)
+    echo "first prompt failed" >&2
+    exit 1
+    ;;
+  *)
+    echo "final prompt completed"
+    exit 0
+    ;;
+esac
+`
+	if err := os.WriteFile(fakeGo, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake go: %v", err)
+	}
+	runner := BatchRunner{
+		GoBin:   fakeGo,
+		BaseURL: "https://llm.example/v1",
+		Model:   "fake-model",
+	}
+	stdout, stderr, exitCode, _, err := runner.runAffentctl(context.Background(), dir, dir, filepath.Join(dir, "trace.jsonl"), BatchScenario{
+		Name:      "continue-after-intermediate-error",
+		SessionID: "continue-after-intermediate-error",
+		MaxTurns:  2,
+		Prompts:   []string{"first fails", "second succeeds"},
+	})
+	if err != nil {
+		t.Fatalf("runAffentctl returned final error: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	if exitCode != 0 || !strings.Contains(stdout, "final prompt completed") || !strings.Contains(stderr, "first prompt failed") {
+		t.Fatalf("runAffentctl output exit=%d stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	rawLog, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read fake go log: %v", err)
+	}
+	if got := strings.Count(string(rawLog), "--prompt"); got != 2 {
+		t.Fatalf("fake go calls = %q, want two prompt invocations", string(rawLog))
+	}
+}
+
 func TestLoopProtocolCalibrationExpectationDoesNotRequireActiveFixture(t *testing.T) {
 	calibrationOnly := BatchScenario{
 		Name:                                    "loop-calibration-only",
@@ -2944,10 +2990,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if iterativeProject.SessionID != "scratch-project-iterative-loop" || !iterativeProject.EnableLoopProtocol {
 		t.Fatalf("iterative scratch project fields = session:%q loop:%v", iterativeProject.SessionID, iterativeProject.EnableLoopProtocol)
 	}
-	if len(iterativeProject.Prompts) != 2 || iterativeProject.Prompt != "" {
+	if len(iterativeProject.Prompts) != 3 || iterativeProject.Prompt != "" ||
+		!strings.Contains(iterativeProject.Prompts[2], "Recovery turn") ||
+		!strings.Contains(iterativeProject.Prompts[2], "completed loop status") {
 		t.Fatalf("iterative scratch project prompts = prompt:%q prompts:%d", iterativeProject.Prompt, len(iterativeProject.Prompts))
 	}
-	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished", agent.WorkspaceVerificationFreshnessGuardLabel}) {
+	if iterativeProject.RequiredLoopProtocolFinalStatus != "completed" {
+		t.Fatalf("iterative scratch project RequiredLoopProtocolFinalStatus = %q, want completed", iterativeProject.RequiredLoopProtocolFinalStatus)
+	}
+	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running", agent.WorkspaceVerificationFreshnessGuardLabel}) {
 		t.Fatalf("iterative scratch project RequiredCompletionGuards = %#v", iterativeProject.RequiredCompletionGuards)
 	}
 	for _, prompt := range iterativeProject.Prompts {
@@ -2957,6 +3008,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if _, ok := iterativeProject.Files[".affent/loops/scratch-project-iterative-loop/LOOP.md"]; !ok {
 		t.Fatalf("iterative scratch project scenario missing active LOOP.md")
+	}
+	if !strings.Contains(iterativeProject.Files[".affent/loops/scratch-project-iterative-loop/LOOP.md"], "finalization_policy: require_close_before_final") {
+		t.Fatalf("iterative scratch project LOOP.md should require explicit final close")
 	}
 	for _, want := range []string{"python3 -m unittest discover -s tests", "git status", "git commit", "git push"} {
 		if !stringSliceContains(iterativeProject.RequiredCommands, want) {
@@ -2972,14 +3026,14 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !commandToolOrderContains(iterativeProject.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "write_file"}) {
 		t.Fatalf("iterative scratch project RequiredCommandAfterTool = %#v, want git status after write_file", iterativeProject.RequiredCommandAfterTool)
 	}
-	for _, want := range []string{"def save_json", "def load_json", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
+	for _, want := range []string{"def save_json", "def load_json", `grep -R "save_json" tests`, `grep -R "load_json" tests`, "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(iterativeProject.VerifyCommand, want) {
 			t.Fatalf("iterative scratch project VerifyCommand = %q, want %q", iterativeProject.VerifyCommand, want)
 		}
 	}
-	if iterativeProject.RequiredLoopProtocolFeeds != 2 ||
+	if iterativeProject.RequiredLoopProtocolFeeds != 1 ||
 		iterativeProject.RequiredLoopProtocolFeedModes["full"] != 1 ||
-		iterativeProject.RequiredLoopProtocolFeedModes["digest"] != 1 ||
+		iterativeProject.RequiredLoopProtocolFeedModes["digest"] != 0 ||
 		len(iterativeProject.RequiredLoopProtocolFeedMatches) != 1 ||
 		!strings.Contains(iterativeProject.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "no source package or tests exist yet") ||
 		!strings.Contains(iterativeProject.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "finish iteration 1") {
