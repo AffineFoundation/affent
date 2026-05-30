@@ -3553,7 +3553,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		modelWindowPolicy.MaxCompactScopedPressurePercent == nil ||
 		*modelWindowPolicy.MaxCompactScopedPressurePercent != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 1 ||
-		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 1 ||
+		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 2 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 0 ||
 		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-5") {
 		t.Fatalf("model-window policy requirements = compactions:%d reasons:%#v compact_scope:%d prefill_source:%q scoped_pressure:%#v trace:%#v final:%#v",

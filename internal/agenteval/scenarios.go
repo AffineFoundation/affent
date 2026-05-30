@@ -2223,7 +2223,7 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 		},
 		RequiredFinalText: []string{"MODEL-WINDOW-POLICY-OK-5"},
 		RequiredTraceEventCounts: map[string]int{
-			sse.TypeRuntimeSurface: 1,
+			sse.TypeRuntimeSurface: 2,
 			sse.TypeContextCompact: 1,
 		},
 		RequiredContextCompactions: 1,
