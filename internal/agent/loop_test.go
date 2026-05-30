@@ -2208,6 +2208,68 @@ func TestPublishRuntimeSurfaceReportsAutoCompactWindowScope(t *testing.T) {
 	}
 }
 
+func TestRunTurnPublishesRuntimeSurfaceWhenCompactWindowUsageObserved(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1234,"completion_tokens":5}}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	events := make(chan sse.Event, 32)
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		LLM:                        NewLLMClient(srv.URL, "", "fake-model"),
+		Conv:                       conv,
+		Events:                     events,
+		ModelContextWindowTokens:   100_000,
+		CompactTriggerInputPercent: 80,
+		PerCallTimeout:             5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	loop.startNextAutoCompactWindow(1_000)
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(5 * time.Second)
+	var observed *sse.RuntimeSurfacePayload
+	for {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeRuntimeSurface:
+				var p sse.RuntimeSurfacePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode runtime surface: %v", err)
+				}
+				if p.RefreshReason == sse.RuntimeSurfaceRefreshCompactWindowObserved {
+					observed = &p
+				}
+			case sse.TypeTurnEnd:
+				if observed == nil {
+					t.Fatal("missing runtime.surface compact window observation before turn end")
+				}
+				if !observed.CompactScopeActive ||
+					observed.CompactWindowOrdinal != 1 ||
+					observed.CompactWindowPrefillInputTokens != 1234 ||
+					observed.CompactWindowPrefillSource != sse.CompactWindowPrefillSourceServerObserved {
+					t.Fatalf("observed runtime surface = %+v", *observed)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for observed compact window runtime surface")
+		}
+	}
+}
+
 func TestRestoreAutoCompactWindowStateSurfacesObservedScope(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))

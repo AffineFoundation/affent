@@ -114,6 +114,10 @@ type RuntimeSurfacePayload struct {
 	TurnToolOverride                   bool                 `json:"turn_tool_override,omitempty"`
 }
 
+const (
+	RuntimeSurfaceRefreshCompactWindowObserved = "compact_window_observed"
+)
+
 type RuntimeWorkspace struct {
 	DefaultCWD           string                  `json:"default_cwd,omitempty"`
 	PathMode             string                  `json:"path_mode,omitempty"`

@@ -2023,6 +2023,14 @@ func scanRuntimeStatsFromEvents(r *bufio.Reader) (*RuntimeStatsSnapshot, error) 
 			_ = json.Unmarshal(ev.Data, &raw)
 			addRuntimeContextCompaction(&summary, p, raw.SummaryPresent != nil)
 			seen = true
+		case sse.TypeRuntimeSurface:
+			var p sse.RuntimeSurfacePayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if addRuntimeSurfaceCompactWindow(&summary, p) {
+				seen = true
+			}
 		}
 	}
 	if !seen {
@@ -2082,6 +2090,24 @@ func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCom
 	summary.ContextCompactionLatestCompactWindowPrefillSource = p.CompactWindowPrefillSource
 	summary.ContextCompactionLatestCompactScopedInputTokens = int64(p.CompactScopedInputTokens)
 	summary.ContextCompactionLatestCompactHardInputLimit = int64(p.CompactHardInputLimitTokens)
+}
+
+func addRuntimeSurfaceCompactWindow(summary *RuntimeStatsSnapshot, p sse.RuntimeSurfacePayload) bool {
+	if !runtimeSurfaceHasCompactWindowState(p) {
+		return false
+	}
+	summary.ContextCompactionLatestTriggerInputTokens = int64(p.CompactTriggerInputTokens)
+	summary.ContextCompactionLatestModelContextWindowTokens = int64(p.ModelContextWindowTokens)
+	summary.ContextCompactionLatestModelContextWindowSource = p.ModelContextWindowSource
+	summary.ContextCompactionLatestReservedOutputTokens = int64(p.ReservedOutputTokens)
+	summary.ContextCompactionLatestTriggerInputPercent = int64(p.CompactTriggerInputPercent)
+	summary.ContextCompactionLatestCompactScopeActive = p.CompactScopeActive
+	summary.ContextCompactionLatestCompactWindowOrdinal = p.CompactWindowOrdinal
+	summary.ContextCompactionLatestCompactWindowPrefill = int64(p.CompactWindowPrefillInputTokens)
+	summary.ContextCompactionLatestCompactWindowPrefillSource = p.CompactWindowPrefillSource
+	summary.ContextCompactionLatestCompactScopedInputTokens = int64(p.CompactScopedInputTokens)
+	summary.ContextCompactionLatestCompactHardInputLimit = int64(p.CompactHardInputLimitTokens)
+	return true
 }
 
 func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {

@@ -3591,7 +3591,9 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 		}
 		if err == nil {
 			if final != nil && final.InputTokens > 0 {
-				l.observeAutoCompactWindowInputTokens(final.InputTokens)
+				if l.observeAutoCompactWindowInputTokens(final.InputTokens) {
+					l.publishRuntimeSurfaceWithReason(turnID, opts, sse.RuntimeSurfaceRefreshCompactWindowObserved)
+				}
 			}
 			return final, "", nil
 		}
@@ -4029,17 +4031,18 @@ func (l *Loop) startNextAutoCompactWindow(estimatedPrefillTokens int) {
 	l.autoCompactWindow.observed = false
 }
 
-func (l *Loop) observeAutoCompactWindowInputTokens(inputTokens int) {
+func (l *Loop) observeAutoCompactWindowInputTokens(inputTokens int) bool {
 	if !l.autoCompactWindowScopeEnabled() || inputTokens <= 0 {
-		return
+		return false
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.observed {
-		return
+		return false
 	}
 	l.autoCompactWindow.prefillTokens = inputTokens
 	l.autoCompactWindow.observed = true
+	return true
 }
 
 func (l *Loop) RestoreAutoCompactWindowState(state AutoCompactWindowState) {

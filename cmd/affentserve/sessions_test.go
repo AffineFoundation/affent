@@ -125,6 +125,60 @@ func TestSessionPool_RestoresAutoCompactWindowFromDurableCompaction(t *testing.T
 	}
 }
 
+func TestSessionPool_RestoresObservedAutoCompactWindowFromRuntimeSurface(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.ModelContextWindowTokens = 100_000
+	pool.cfg.CompactTriggerInputPercent = 80
+	createDurableSessionDir(t, pool, "compact-window-observed")
+	dir := pool.sessionDirPath("compact-window-observed")
+	body := sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
+		TurnID:                          "t1",
+		Reason:                          "estimated_context_pressure",
+		EstimatedInputTokens:            120_000,
+		AfterEstimatedInputTokens:       68_000,
+		TriggerInputTokens:              80_000,
+		ModelContextWindowTokens:        100_000,
+		CompactTriggerInputPercent:      80,
+		CompactScopeActive:              true,
+		CompactWindowOrdinal:            3,
+		CompactWindowPrefillInputTokens: 68_000,
+		CompactWindowPrefillSource:      sse.CompactWindowPrefillSourceEstimated,
+		CompactHardInputLimitTokens:     100_000,
+		SummaryPresent:                  true,
+		SummaryBytes:                    512,
+	}) + sessionEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
+		TurnID:                          "t1",
+		RefreshReason:                   sse.RuntimeSurfaceRefreshCompactWindowObserved,
+		ModelContextWindowTokens:        100_000,
+		ReservedOutputTokens:            30_000,
+		CompactTriggerInputTokens:       80_000,
+		CompactTriggerInputPercent:      80,
+		CompactScopeActive:              true,
+		CompactWindowOrdinal:            3,
+		CompactWindowPrefillInputTokens: 72_000,
+		CompactWindowPrefillSource:      sse.CompactWindowPrefillSourceServerObserved,
+		CompactHardInputLimitTokens:     100_000,
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := pool.GetOrCreate("compact-window-observed")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	got := s.loop.AutoCompactWindowState()
+	if got.Ordinal != 3 || got.PrefillInputTokens != 72_000 || !got.Observed {
+		t.Fatalf("auto compact window = %+v, want latest observed runtime surface state", got)
+	}
+	runtime := s.RuntimeStatsSnapshot()
+	if runtime.ContextCompactions != 1 ||
+		runtime.ContextCompactionLatestCompactWindowPrefill != 72_000 ||
+		runtime.ContextCompactionLatestCompactWindowPrefillSource != sse.CompactWindowPrefillSourceServerObserved {
+		t.Fatalf("runtime stats = %+v, want compaction count with observed compact window", runtime)
+	}
+}
+
 // TestSessionPool_SignalShutdown pins the early-flip contract:
 // SignalShutdown sets IsShuttingDown immediately (so /healthz can
 // return 503 the moment SIGTERM arrives), GetOrCreate fails with

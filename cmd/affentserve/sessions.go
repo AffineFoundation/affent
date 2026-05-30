@@ -1978,9 +1978,10 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 }
 
 // RuntimeStatsSnapshot returns non-tool runtime outcomes accumulated from
-// turn.end and error events. This is intentionally separate from ToolStats:
-// a missing final answer can be a turn budget outcome, while LLM stream
-// failures are runtime errors, not browser/web_fetch failures.
+// turn.end, error, context.compacted, and compact-window runtime.surface
+// events. This is intentionally separate from ToolStats: a missing final
+// answer can be a turn budget outcome, while LLM stream failures are runtime
+// errors, not browser/web_fetch failures.
 type RuntimeStatsSnapshot struct {
 	TurnEndByReason                                   map[string]int64 `json:"turn_end_by_reason,omitempty"`
 	RuntimeErrors                                     int64            `json:"runtime_errors"`
@@ -2121,6 +2122,12 @@ func (s *Session) observeForStats(ev sse.Event) {
 			return
 		}
 		s.addContextCompaction(p)
+	case sse.TypeRuntimeSurface:
+		var p sse.RuntimeSurfacePayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
+		s.addRuntimeSurfaceCompactWindow(p)
 	}
 }
 
@@ -2218,6 +2225,38 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	s.runtimeStatsMu.Unlock()
 }
 
+func (s *Session) addRuntimeSurfaceCompactWindow(p sse.RuntimeSurfacePayload) {
+	if !runtimeSurfaceHasCompactWindowState(p) {
+		return
+	}
+	s.runtimeStatsMu.Lock()
+	defer s.runtimeStatsMu.Unlock()
+	s.contextCompactionLastTrigger = int64(p.CompactTriggerInputTokens)
+	s.contextCompactionLastModelWindow = int64(p.ModelContextWindowTokens)
+	s.contextCompactionLastModelSource = p.ModelContextWindowSource
+	s.contextCompactionLastReserve = int64(p.ReservedOutputTokens)
+	s.contextCompactionLastPercent = int64(p.CompactTriggerInputPercent)
+	s.contextCompactionLastScopeActive = p.CompactScopeActive
+	s.contextCompactionLastWindowOrdinal = p.CompactWindowOrdinal
+	s.contextCompactionLastPrefill = int64(p.CompactWindowPrefillInputTokens)
+	s.contextCompactionLastPrefillSource = p.CompactWindowPrefillSource
+	s.contextCompactionLastScopedInput = int64(p.CompactScopedInputTokens)
+	s.contextCompactionLastHardLimit = int64(p.CompactHardInputLimitTokens)
+}
+
+func runtimeSurfaceHasCompactWindowState(p sse.RuntimeSurfacePayload) bool {
+	return p.CompactScopeActive && p.CompactWindowOrdinal > 0 && p.CompactWindowPrefillInputTokens > 0
+}
+
+func runtimeStatsSnapshotHasLatestCompactionState(stats RuntimeStatsSnapshot) bool {
+	return stats.ContextCompactions > 0 ||
+		stats.ContextCompactionLatestReason != "" ||
+		stats.ContextCompactionLatestState != "" ||
+		stats.ContextCompactionLatestCompactScopeActive ||
+		stats.ContextCompactionLatestCompactWindowOrdinal > 0 ||
+		stats.ContextCompactionLatestCompactWindowPrefill > 0
+}
+
 func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 	s.runtimeErrors.Add(positiveInt64(stats.RuntimeErrors))
 	s.contextCompactions.Add(positiveInt64(stats.ContextCompactions))
@@ -2241,7 +2280,7 @@ func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 		}
 		addStringInt64Counts(s.runtimeErrorByKind, stats.RuntimeErrorByKind)
 	}
-	if stats.ContextCompactions > 0 || stats.ContextCompactionLatestReason != "" || stats.ContextCompactionLatestState != "" {
+	if runtimeStatsSnapshotHasLatestCompactionState(stats) {
 		s.contextCompactionLastReason = stats.ContextCompactionLatestReason
 		s.contextCompactionLastReactive = stats.ContextCompactionLatestReactive
 		s.contextCompactionLastSummaryState = stats.ContextCompactionLatestState
