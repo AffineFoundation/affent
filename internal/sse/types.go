@@ -108,6 +108,10 @@ type RuntimeSurfacePayload struct {
 	EstimatedConversationTokens        int                  `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens          int                  `json:"estimated_tool_schema_tokens,omitempty"`
 	EstimatedRequestInputTokens        int                  `json:"estimated_request_input_tokens,omitempty"`
+	RequestInputCompactPercent         int                  `json:"request_input_compact_percent,omitempty"`
+	RequestInputTokensUntilCompact     int                  `json:"request_input_tokens_until_compact,omitempty"`
+	RequestInputHardLimitPercent       int                  `json:"request_input_hard_limit_percent,omitempty"`
+	RequestInputTokensUntilHardLimit   int                  `json:"request_input_tokens_until_hard_limit,omitempty"`
 	ToolResultEventCapBytes            int                  `json:"tool_result_event_cap_bytes,omitempty"`
 	ToolResultContextMaxBytes          int                  `json:"tool_result_context_max_bytes,omitempty"`
 	ToolResultContextBudgetBytes       int                  `json:"tool_result_context_budget_bytes,omitempty"`

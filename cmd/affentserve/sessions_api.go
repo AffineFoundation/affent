@@ -1495,29 +1495,15 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		bytePercent = (contextBytes*100 + byteTrigger/2) / byteTrigger
 	}
 	inputTrigger := compactionPolicy.TriggerInputTokens
-	inputTokensUntilCompact := inputTrigger - estimatedRequestInputTokens
-	if inputTokensUntilCompact < 0 {
-		inputTokensUntilCompact = 0
-	}
-	inputPercent := 0
-	if inputTrigger > 0 && estimatedRequestInputTokens > 0 {
-		inputPercent = (estimatedRequestInputTokens*100 + inputTrigger/2) / inputTrigger
-	}
+	inputPressure := agent.RequestInputPressureForLimit(estimatedRequestInputTokens, inputTrigger)
 	hardInputLimit := compactionPolicy.HardInputLimitTokens
-	inputTokensUntilHardLimit := hardInputLimit - estimatedRequestInputTokens
-	if inputTokensUntilHardLimit < 0 {
-		inputTokensUntilHardLimit = 0
-	}
-	hardInputPercent := 0
-	if hardInputLimit > 0 && estimatedRequestInputTokens > 0 {
-		hardInputPercent = (estimatedRequestInputTokens*100 + hardInputLimit/2) / hardInputLimit
-	}
+	hardLimitPressure := agent.RequestInputPressureForLimit(estimatedRequestInputTokens, hardInputLimit)
 	percent := messagePercent
 	if bytePercent > percent {
 		percent = bytePercent
 	}
-	if inputPercent > percent {
-		percent = inputPercent
+	if inputPressure.Percent > percent {
+		percent = inputPressure.Percent
 	}
 	return sessionContextSummary{
 		MessageCount:                       messageCount,
@@ -1543,10 +1529,10 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		CompactTriggerInputTokens:          inputTrigger,
 		CompactHardInputLimitTokens:        hardInputLimit,
 		CompactSummaryPromptMaxBytes:       compactionPolicy.MaxPromptBytes,
-		RequestInputCompactPercent:         inputPercent,
-		RequestInputTokensUntilCompact:     inputTokensUntilCompact,
-		RequestInputHardLimitPercent:       hardInputPercent,
-		RequestInputTokensUntilHardLimit:   inputTokensUntilHardLimit,
+		RequestInputCompactPercent:         inputPressure.Percent,
+		RequestInputTokensUntilCompact:     inputPressure.TokensUntilLimit,
+		RequestInputHardLimitPercent:       hardLimitPressure.Percent,
+		RequestInputTokensUntilHardLimit:   hardLimitPressure.TokensUntilLimit,
 	}
 }
 

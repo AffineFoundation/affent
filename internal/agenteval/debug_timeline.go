@@ -1284,6 +1284,18 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		if surface.EstimatedRequestInputTokens > 0 {
 			parts = append(parts, fmt.Sprintf("estimated_request_input_tokens=`%d`", surface.EstimatedRequestInputTokens))
 		}
+		if surface.RequestInputCompactPercent > 0 {
+			parts = append(parts, fmt.Sprintf("request_input_compact_percent=`%d`", surface.RequestInputCompactPercent))
+		}
+		if surface.RequestInputTokensUntilCompact > 0 {
+			parts = append(parts, fmt.Sprintf("request_input_tokens_until_compact=`%d`", surface.RequestInputTokensUntilCompact))
+		}
+		if surface.RequestInputHardLimitPercent > 0 {
+			parts = append(parts, fmt.Sprintf("request_input_hard_limit_percent=`%d`", surface.RequestInputHardLimitPercent))
+		}
+		if surface.RequestInputTokensUntilHardLimit > 0 {
+			parts = append(parts, fmt.Sprintf("request_input_tokens_until_hard_limit=`%d`", surface.RequestInputTokensUntilHardLimit))
+		}
 		if surface.EstimatedConversationTokens > 0 {
 			parts = append(parts, fmt.Sprintf("estimated_conversation_tokens=`%d`", surface.EstimatedConversationTokens))
 		}

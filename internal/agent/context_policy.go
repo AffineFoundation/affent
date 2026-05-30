@@ -217,3 +217,30 @@ func ToolSchemaBudgetTokensForRequestPolicy(inputTriggerTokens, conversationToke
 	}
 	return remaining
 }
+
+// RequestInputLimitPressure is the normalized pressure of an estimated next
+// request against one input-token limit. It is shared by runtime telemetry,
+// session summaries, and eval checks so operator-facing pressure math stays
+// consistent.
+type RequestInputLimitPressure struct {
+	Percent          int
+	TokensUntilLimit int
+}
+
+func RequestInputPressureForLimit(estimatedTokens, limitTokens int) RequestInputLimitPressure {
+	if limitTokens <= 0 {
+		return RequestInputLimitPressure{}
+	}
+	remaining := limitTokens - estimatedTokens
+	if remaining < 0 {
+		remaining = 0
+	}
+	percent := 0
+	if estimatedTokens > 0 {
+		percent = (estimatedTokens*100 + limitTokens/2) / limitTokens
+	}
+	return RequestInputLimitPressure{
+		Percent:          percent,
+		TokensUntilLimit: remaining,
+	}
+}

@@ -3153,6 +3153,9 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 	}
 	inputEstimate := EstimateRequestInput(messages, toolSurface.Defs)
 	requestPressure := l.requestPressureStatusForMessages(messages, toolSurface.Defs)
+	inputTrigger := l.compactTriggerInputTokens()
+	compactPressure := RequestInputPressureForLimit(inputEstimate.EstimatedInputTokens, inputTrigger)
+	hardLimitPressure := RequestInputPressureForLimit(inputEstimate.EstimatedInputTokens, requestPressure.HardInputLimitTokens)
 	payload := sse.RuntimeSurfacePayload{
 		TurnID:                             turnID,
 		RefreshReason:                      strings.TrimSpace(reason),
@@ -3164,7 +3167,7 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 		ModelContextWindowSource:           l.modelContextWindowSource(),
 		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               l.reservedOutputTokens(),
-		CompactTriggerInputTokens:          l.compactTriggerInputTokens(),
+		CompactTriggerInputTokens:          inputTrigger,
 		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
 		CompactScopeActive:                 requestPressure.ScopedWindowActivated,
 		CompactWindowOrdinal:               requestPressure.WindowOrdinal,
@@ -3178,6 +3181,10 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 		EstimatedConversationTokens:        inputEstimate.ConversationTokens,
 		EstimatedToolSchemaTokens:          inputEstimate.ToolSchemaTokens,
 		EstimatedRequestInputTokens:        inputEstimate.EstimatedInputTokens,
+		RequestInputCompactPercent:         compactPressure.Percent,
+		RequestInputTokensUntilCompact:     compactPressure.TokensUntilLimit,
+		RequestInputHardLimitPercent:       hardLimitPressure.Percent,
+		RequestInputTokensUntilHardLimit:   hardLimitPressure.TokensUntilLimit,
 		AvailableToolCount:                 toolSurface.AvailableCount,
 		ExcludedToolCount:                  len(toolSurface.ExcludedCatalog),
 		ToolSchemaBudgetTokens:             toolSurface.SchemaBudgetTokens,

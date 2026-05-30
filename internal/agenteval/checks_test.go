@@ -1029,7 +1029,7 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{TurnID: "loop", LoopProtocolControl: &sse.RuntimeControlScope{Enabled: true, ToolAvailable: true, Reason: "enabled_for_turn"}, RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 56000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
+		{TurnID: "loop", LoopProtocolControl: &sse.RuntimeControlScope{Enabled: true, ToolAvailable: true, Reason: "enabled_for_turn"}, RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 56000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedRequestInputTokens: 63000, RequestInputCompactPercent: 113, RequestInputTokensUntilCompact: 0, RequestInputHardLimitPercent: 90, RequestInputTokensUntilHardLimit: 7000, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
 		{TurnID: "timer", LoopProtocolControl: &sse.RuntimeControlScope{Enabled: false, Reason: "disabled_for_turn"}},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
@@ -1098,6 +1098,9 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceHardInputLimitMatchesModelPolicy().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface hard input limit policy check to pass: %+v", res)
 	}
+	if res := RuntimeSurfaceRequestInputPressureMatchesLimits().Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface request input pressure check to pass: %+v", res)
+	}
 	if res := RuntimeSurfaceToolSchemaWithinBudget().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface tool schema budget check to pass: %+v", res)
 	}
@@ -1160,6 +1163,24 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	for _, want := range []string{"expected=70000", "hard_limit=80000", "reserve=30000"} {
 		if !strings.Contains(badHardLimitPolicy.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", badHardLimitPolicy.Detail, want)
+		}
+	}
+	badPressurePolicy := RuntimeSurfaceRequestInputPressureMatchesLimits().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+		TurnID:                           "bad-pressure",
+		EstimatedRequestInputTokens:      63000,
+		CompactTriggerInputTokens:        56000,
+		RequestInputCompactPercent:       112,
+		RequestInputTokensUntilCompact:   1,
+		CompactHardInputLimitTokens:      70000,
+		RequestInputHardLimitPercent:     90,
+		RequestInputTokensUntilHardLimit: 7000,
+	}}})
+	if badPressurePolicy.Pass {
+		t.Fatal("expected mismatched runtime surface pressure check to fail")
+	}
+	for _, want := range []string{"compact pressure mismatch", "expected percent=113", "remaining=0"} {
+		if !strings.Contains(badPressurePolicy.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", badPressurePolicy.Detail, want)
 		}
 	}
 	badToolBudget := RuntimeSurfaceToolSchemaWithinBudget().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{

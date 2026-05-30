@@ -3811,6 +3811,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.CompactTriggerInputTokens > 0 {
 		checks = append(checks, RuntimeSurfaceCompactTriggerInputTokens(scenario.CompactTriggerInputTokens))
+		checks = append(checks, RuntimeSurfaceRequestInputPressureMatchesLimits())
 		if scenario.ModelContextWindowTokens > 0 {
 			checks = append(checks, RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy())
 			checks = append(checks, RuntimeSurfaceHardInputLimitMatchesModelPolicy())
@@ -3818,6 +3819,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, RuntimeSurfaceToolSchemaWithinBudget())
 	} else if scenario.ModelContextWindowTokens > 0 {
 		checks = append(checks, RuntimeSurfaceCompactTriggerMatchesModelPolicy())
+		checks = append(checks, RuntimeSurfaceRequestInputPressureMatchesLimits())
 		checks = append(checks, RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy())
 		checks = append(checks, RuntimeSurfaceHardInputLimitMatchesModelPolicy())
 		checks = append(checks, RuntimeSurfaceToolSchemaWithinBudget())

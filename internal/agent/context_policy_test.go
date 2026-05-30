@@ -24,6 +24,30 @@ func TestModelInputCapacityTokens(t *testing.T) {
 	}
 }
 
+func TestRequestInputPressureForLimit(t *testing.T) {
+	tests := []struct {
+		name          string
+		estimated     int
+		limit         int
+		wantPercent   int
+		wantRemaining int
+	}{
+		{name: "disabled", estimated: 100, wantPercent: 0, wantRemaining: 0},
+		{name: "below limit", estimated: 750, limit: 1000, wantPercent: 75, wantRemaining: 250},
+		{name: "over limit", estimated: 1500, limit: 1000, wantPercent: 150, wantRemaining: 0},
+		{name: "small pressure rounds to zero", estimated: 111, limit: 80000, wantPercent: 0, wantRemaining: 79889},
+		{name: "rounds to nearest percent", estimated: 63000, limit: 56000, wantPercent: 113, wantRemaining: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RequestInputPressureForLimit(tt.estimated, tt.limit)
+			if got.Percent != tt.wantPercent || got.TokensUntilLimit != tt.wantRemaining {
+				t.Fatalf("RequestInputPressureForLimit(%d, %d) = %+v, want percent=%d remaining=%d", tt.estimated, tt.limit, got, tt.wantPercent, tt.wantRemaining)
+			}
+		})
+	}
+}
+
 func TestNewLLMSummaryCompactorForPolicyUsesDefaults(t *testing.T) {
 	got := NewLLMSummaryCompactorForPolicy(SummaryCompactorPolicy{})
 	if got.TriggerMsgs != DefaultSummaryTriggerMsgs ||

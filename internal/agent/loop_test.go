@@ -2043,11 +2043,21 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		payload.ToolSchemaBytes <= 0 ||
 		payload.EstimatedToolSchemaTokens <= 0 ||
 		payload.EstimatedRequestInputTokens <= 0 ||
+		payload.RequestInputTokensUntilCompact <= 0 ||
+		payload.RequestInputTokensUntilHardLimit <= 0 ||
 		payload.ToolResultEventCapBytes != MaxToolResultBytesInEvent ||
 		payload.ToolResultContextMaxBytes != 1234 ||
 		payload.ToolResultContextBudgetBytes != 5678 ||
 		payload.ToolResultArtifactPrefix != ".affent/custom" {
 		t.Fatalf("limits = %+v", payload)
+	}
+	compactPressure := RequestInputPressureForLimit(payload.EstimatedRequestInputTokens, payload.CompactTriggerInputTokens)
+	hardLimitPressure := RequestInputPressureForLimit(payload.EstimatedRequestInputTokens, payload.CompactHardInputLimitTokens)
+	if payload.RequestInputCompactPercent != compactPressure.Percent ||
+		payload.RequestInputTokensUntilCompact != compactPressure.TokensUntilLimit ||
+		payload.RequestInputHardLimitPercent != hardLimitPressure.Percent ||
+		payload.RequestInputTokensUntilHardLimit != hardLimitPressure.TokensUntilLimit {
+		t.Fatalf("request pressure fields = %+v", payload)
 	}
 	if len(payload.ToolCallCaps) != 2 ||
 		payload.ToolCallCaps[0] != (sse.RuntimeToolCallCap{Tool: "web_fetch", Max: perTurnCallCaps["web_fetch"]}) ||

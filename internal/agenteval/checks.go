@@ -1558,6 +1558,66 @@ func RuntimeSurfaceHardInputLimitMatchesModelPolicy() Check {
 	}
 }
 
+func RuntimeSurfaceRequestInputPressureMatchesLimits() Check {
+	return Check{
+		Name: "runtime_surface_request_input_pressure_matches_limits",
+		Eval: func(t Trace) CheckResult {
+			var observed []string
+			checked := 0
+			for _, surface := range t.RuntimeSurfaces {
+				estimated := surface.EstimatedRequestInputTokens
+				if estimated <= 0 {
+					continue
+				}
+				observed = append(observed, fmt.Sprintf("turn=%s estimated=%d trigger=%d trigger_pressure=%d trigger_remaining=%d hard_limit=%d hard_pressure=%d hard_remaining=%d",
+					surface.TurnID,
+					estimated,
+					surface.CompactTriggerInputTokens,
+					surface.RequestInputCompactPercent,
+					surface.RequestInputTokensUntilCompact,
+					surface.CompactHardInputLimitTokens,
+					surface.RequestInputHardLimitPercent,
+					surface.RequestInputTokensUntilHardLimit,
+				))
+				if surface.CompactTriggerInputTokens > 0 {
+					checked++
+					expected := agent.RequestInputPressureForLimit(estimated, surface.CompactTriggerInputTokens)
+					if surface.RequestInputCompactPercent != expected.Percent || surface.RequestInputTokensUntilCompact != expected.TokensUntilLimit {
+						return CheckResult{
+							Pass: false,
+							Detail: fmt.Sprintf(
+								"runtime.surface request input compact pressure mismatch: expected percent=%d remaining=%d; observed=%v",
+								expected.Percent,
+								expected.TokensUntilLimit,
+								observed,
+							),
+						}
+					}
+				}
+				if surface.CompactHardInputLimitTokens > 0 {
+					checked++
+					expected := agent.RequestInputPressureForLimit(estimated, surface.CompactHardInputLimitTokens)
+					if surface.RequestInputHardLimitPercent != expected.Percent || surface.RequestInputTokensUntilHardLimit != expected.TokensUntilLimit {
+						return CheckResult{
+							Pass: false,
+							Detail: fmt.Sprintf(
+								"runtime.surface request input hard-limit pressure mismatch: expected percent=%d remaining=%d; observed=%v",
+								expected.Percent,
+								expected.TokensUntilLimit,
+								observed,
+							),
+						}
+					}
+				}
+			}
+			if checked == 0 {
+				return CheckResult{Pass: true, Detail: "no runtime.surface request input limits observed"}
+			}
+			return CheckResult{Pass: true, Detail: fmt.Sprintf("request input pressure fields matched; observed=%v", observed)}
+		},
+	}
+}
+
 func RuntimeSurfaceToolSchemaWithinBudget() Check {
 	return Check{
 		Name: "runtime_surface_tool_schema_within_budget",
