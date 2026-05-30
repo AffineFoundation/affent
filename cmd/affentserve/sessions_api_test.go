@@ -2989,6 +2989,51 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	}
 }
 
+func TestHandleSessionScheduleResumeLoopTickRequiresRunningProtocol(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-resume")
+	now := time.Date(2026, 5, 27, 13, 30, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "loop-resume", sessionSchedule{
+		ID:        "sched_loop",
+		Kind:      sessionScheduleKindLoopTick,
+		Prompt:    "Nudge the active loop.",
+		Enabled:   false,
+		NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
+		CreatedAt: now.Format(time.RFC3339),
+		UpdatedAt: now.Format(time.RFC3339),
+	})
+
+	r := httptest.NewRequest(http.MethodPatch, "/v1/sessions/loop-resume/schedules/sched_loop", strings.NewReader(`{"enabled":true}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("resume status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "running LOOP.md") {
+		t.Fatalf("resume loop_tick error missing running loop guidance: %s", w.Body.String())
+	}
+	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "loop-resume"))
+	if err != nil || !found || len(file.Schedules) != 1 || file.Schedules[0].Enabled {
+		t.Fatalf("schedule after rejected resume found=%v err=%v schedules=%+v, want disabled", found, err, file.Schedules)
+	}
+
+	writeLoopProtocolStatusFixture(t, pool, "loop-resume", "running")
+	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/loop-resume/schedules/sched_loop", strings.NewReader(`{"enabled":true}`))
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("resume with running loop status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode resume: %v", err)
+	}
+	if len(resp.Schedules) != 1 || !resp.Schedules[0].Enabled || resp.Summary == nil || resp.Summary.PendingLoopTicks != 0 {
+		t.Fatalf("resume response = %+v, want enabled non-pending loop_tick", resp)
+	}
+}
+
 func TestHandleSessionSchedules_ValidatesRequest(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	cases := []struct {

@@ -213,6 +213,11 @@ func sessionScheduleToolUpdate(pool *SessionPool, sessionID string, p sessionSch
 		if file.Schedules[i].ID != p.ScheduleID {
 			continue
 		}
+		if *p.Enabled {
+			if err := validateSessionScheduleKindForSession(pool, sessionID, file.Schedules[i].Kind); err != nil {
+				return "", err
+			}
+		}
 		file.Schedules[i].Enabled = *p.Enabled
 		file.Schedules[i].UpdatedAt = now
 		file.Schedules[i].LastError = ""

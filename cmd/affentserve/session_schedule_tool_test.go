@@ -84,6 +84,44 @@ func TestSessionScheduleToolLoopTickRequiresRunningProtocol(t *testing.T) {
 	}
 }
 
+func TestSessionScheduleToolResumeLoopTickRequiresRunningProtocol(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	reg := agent.NewRegistry()
+	registerSessionScheduleTool(reg, pool, "loop-tick-resume")
+	tool, ok := reg.Get(sessionScheduleToolName)
+	if !ok {
+		t.Fatal("session_schedule tool not registered")
+	}
+	now := time.Date(2026, 5, 29, 6, 30, 0, 0, time.UTC)
+	createDurableSessionDir(t, pool, "loop-tick-resume")
+	writeScheduleFixture(t, pool, "loop-tick-resume", sessionSchedule{
+		ID:        "sched_loop",
+		Kind:      sessionScheduleKindLoopTick,
+		Prompt:    "Nudge the active loop.",
+		Enabled:   false,
+		NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
+		CreatedAt: now.Format(time.RFC3339),
+		UpdatedAt: now.Format(time.RFC3339),
+	})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"update","schedule_id":"sched_loop","enabled":true}`))
+	if err == nil || !strings.Contains(err.Error(), "running LOOP.md") {
+		t.Fatalf("session_schedule loop_tick resume err = %v, want running LOOP.md guidance", err)
+	}
+	file, found, readErr := readSessionSchedulesFile(sessionSchedulesPath(pool, "loop-tick-resume"))
+	if readErr != nil || !found || len(file.Schedules) != 1 || file.Schedules[0].Enabled {
+		t.Fatalf("schedule after rejected resume found=%v err=%v schedules=%+v, want disabled", found, readErr, file.Schedules)
+	}
+
+	writeLoopProtocolStatusFixture(t, pool, "loop-tick-resume", "running")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"update","schedule_id":"sched_loop","enabled":true}`))
+	if err != nil {
+		t.Fatalf("session_schedule loop_tick resume with running protocol: %v", err)
+	}
+	if !strings.Contains(out, `"enabled": true`) || !strings.Contains(out, `"kind": "loop_tick"`) {
+		t.Fatalf("resume output missing enabled loop_tick:\n%s", out)
+	}
+}
+
 func TestSessionScheduleToolCreatedTimerIsVisibleThroughSessionAPI(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	reg := agent.NewRegistry()

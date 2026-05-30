@@ -175,6 +175,12 @@ func handleSessionScheduleUpdate(pool *SessionPool, sessionID, scheduleID string
 		if file.Schedules[i].ID != scheduleID {
 			continue
 		}
+		if *req.Enabled {
+			if err := validateSessionScheduleKindForSession(pool, sessionID, file.Schedules[i].Kind); err != nil {
+				writeJSONErrorTyped(w, http.StatusConflict, "schedule kind unavailable", err, "invalid_schedule_kind")
+				return
+			}
+		}
 		file.Schedules[i].Enabled = *req.Enabled
 		file.Schedules[i].UpdatedAt = now
 		file.Schedules[i].LastError = ""
