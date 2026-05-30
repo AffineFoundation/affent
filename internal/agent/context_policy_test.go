@@ -46,14 +46,14 @@ func TestNewLLMSummaryCompactorForPolicyAlignsWithModelWindow(t *testing.T) {
 	if got.TriggerMsgs != 12 || got.KeepLast != 3 {
 		t.Fatalf("explicit retention = trigger:%d keep_last:%d, want 12/3", got.TriggerMsgs, got.KeepLast)
 	}
-	if got.TriggerBytes != 280_000 {
-		t.Fatalf("trigger bytes = %d, want 280000 from 70k input capacity", got.TriggerBytes)
+	if got.TriggerBytes != 224_000 {
+		t.Fatalf("trigger bytes = %d, want 224000 from 80%% of 70k input capacity", got.TriggerBytes)
 	}
 	if got.MaxPromptBytes != DefaultSummaryPromptMaxBytes {
 		t.Fatalf("large-window prompt cap = %d, want default %d", got.MaxPromptBytes, DefaultSummaryPromptMaxBytes)
 	}
 	resolved := ResolveSummaryCompactorPolicy(policy)
-	if resolved.TriggerInputTokens != 70_000 ||
+	if resolved.TriggerInputTokens != 56_000 ||
 		resolved.HardInputLimitTokens != 70_000 ||
 		resolved.TriggerBytes != got.TriggerBytes ||
 		resolved.MaxPromptBytes != got.MaxPromptBytes {

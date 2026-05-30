@@ -32,17 +32,27 @@ func CompactTriggerInputTokensForPolicy(explicit, modelContextWindowTokens, perc
 }
 
 // CompactTriggerInputTokensForModelPolicy resolves the same request-input
-// compaction threshold, then caps derived model-window policy by the configured
-// output budget. Explicit thresholds keep their exact meaning; the reserve only
-// applies when Affent is deriving the trigger from model metadata.
+// compaction threshold, then applies the trigger percentage to the input
+// capacity left after reserving output tokens. Explicit thresholds keep their
+// exact meaning; the reserve only applies when Affent is deriving the trigger
+// from model metadata.
 func CompactTriggerInputTokensForModelPolicy(explicit, modelContextWindowTokens, percent, reservedOutputTokens, fallback int) int {
-	trigger := CompactTriggerInputTokensForPolicy(explicit, modelContextWindowTokens, percent, fallback)
-	if explicit != 0 || trigger <= 0 || modelContextWindowTokens <= 0 || reservedOutputTokens <= 0 {
-		return trigger
+	if explicit != 0 || modelContextWindowTokens <= 0 || reservedOutputTokens <= 0 {
+		return CompactTriggerInputTokensForPolicy(explicit, modelContextWindowTokens, percent, fallback)
 	}
 	inputCapacity := ModelInputCapacityTokens(modelContextWindowTokens, reservedOutputTokens)
-	if trigger > inputCapacity {
-		return inputCapacity
+	if inputCapacity <= 0 {
+		return CompactTriggerInputTokensForPolicy(explicit, modelContextWindowTokens, percent, fallback)
+	}
+	if percent <= 0 {
+		percent = DefaultCompactTriggerInputPercent
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	trigger := inputCapacity * percent / 100
+	if trigger < 1 {
+		return 1
 	}
 	return trigger
 }

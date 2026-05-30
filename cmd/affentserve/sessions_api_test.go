@@ -433,17 +433,17 @@ func TestSessionContextSnapshotReservesOutputBudgetInModelContextPolicy(t *testi
 		ModelContextWindowTokens:   100_000,
 		CompactTriggerInputPercent: 80,
 	})
-	if got.CompactTriggerInputTokens != 70_000 ||
+	if got.CompactTriggerInputTokens != 56_000 ||
 		got.CompactHardInputLimitTokens != 70_000 ||
 		got.ReservedOutputTokens != 30_000 ||
-		got.RequestInputCompactPercent != 86 ||
-		got.RequestInputTokensUntilCompact != 10_000 ||
+		got.RequestInputCompactPercent != 107 ||
+		got.RequestInputTokensUntilCompact != 0 ||
 		got.RequestInputHardLimitPercent != 86 ||
 		got.RequestInputTokensUntilHardLimit != 10_000 {
 		t.Fatalf("context snapshot = %+v, want output-reserved request and hard-limit pressure", got)
 	}
-	if got.CompactTriggerBytes != 280_000 {
-		t.Fatalf("byte trigger = %d, want 280000 aligned with output-reserved model-window policy", got.CompactTriggerBytes)
+	if got.CompactTriggerBytes != 224_000 {
+		t.Fatalf("byte trigger = %d, want 224000 aligned with output-reserved model-window policy", got.CompactTriggerBytes)
 	}
 	if got.CompactSummaryPromptMaxBytes != agent.DefaultSummaryPromptMaxBytes {
 		t.Fatalf("summary prompt max bytes = %d, want default %d for large model window", got.CompactSummaryPromptMaxBytes, agent.DefaultSummaryPromptMaxBytes)

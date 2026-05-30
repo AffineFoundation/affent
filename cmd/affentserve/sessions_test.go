@@ -1466,8 +1466,8 @@ func TestSessionPool_CompactorReservesOutputBudgetInModelWindowByteTrigger(t *te
 	if !ok {
 		t.Fatalf("compactor type = %T, want *agent.LLMSummaryCompactor", s.loop.Compactor)
 	}
-	if got := lc.TriggerBytes; got != 280000 {
-		t.Fatalf("TriggerBytes = %d, want 280000", got)
+	if got := lc.TriggerBytes; got != 224000 {
+		t.Fatalf("TriggerBytes = %d, want 224000", got)
 	}
 	if got := s.loop.CompactTriggerInputTokens; got != 0 {
 		t.Fatalf("explicit CompactTriggerInputTokens = %d, want 0", got)

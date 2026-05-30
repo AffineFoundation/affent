@@ -2132,7 +2132,7 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 			},
 		},
 		Events:                     events,
-		Compactor:                  &LLMSummaryCompactor{MaxPromptBytes: 280_000},
+		Compactor:                  &LLMSummaryCompactor{MaxPromptBytes: 224_000},
 		ModelContextWindowTokens:   100_000,
 		CompactTriggerInputPercent: 80,
 	}
@@ -2146,14 +2146,14 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 	if err := json.Unmarshal(ev.Data, &payload); err != nil {
 		t.Fatalf("decode runtime surface: %v", err)
 	}
-	if payload.CompactTriggerInputTokens != 70_000 {
-		t.Fatalf("compact trigger = %d, want output-reserved 70000", payload.CompactTriggerInputTokens)
+	if payload.CompactTriggerInputTokens != 56_000 {
+		t.Fatalf("compact trigger = %d, want 80%% of output-reserved input capacity 56000", payload.CompactTriggerInputTokens)
 	}
 	if payload.ReservedOutputTokens != 30_000 {
 		t.Fatalf("reserved output tokens = %d, want 30000", payload.ReservedOutputTokens)
 	}
-	if payload.CompactSummaryPromptMaxBytes != 280_000 {
-		t.Fatalf("compact summary prompt max bytes = %d, want 280000", payload.CompactSummaryPromptMaxBytes)
+	if payload.CompactSummaryPromptMaxBytes != 224_000 {
+		t.Fatalf("compact summary prompt max bytes = %d, want 224000", payload.CompactSummaryPromptMaxBytes)
 	}
 }
 

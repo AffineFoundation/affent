@@ -1026,7 +1026,7 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
+		{RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 56000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
@@ -1043,7 +1043,7 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceModelContextWindowSource("provider").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface model context source check to pass: %+v", res)
 	}
-	if res := RuntimeSurfaceCompactTriggerInputTokens(70000).Eval(trace); !res.Pass {
+	if res := RuntimeSurfaceCompactTriggerInputTokens(56000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface compact trigger check to pass: %+v", res)
 	}
 	if res := RuntimeSurfaceCompactScopeActive().Eval(trace); !res.Pass {
@@ -1107,7 +1107,7 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res.Pass {
 		t.Fatal("expected mismatched runtime surface compact trigger to fail")
 	}
-	for _, want := range []string{"compact_trigger_input_tokens=1", "observed=[70000]"} {
+	for _, want := range []string{"compact_trigger_input_tokens=1", "observed=[56000]"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
 		}
@@ -1121,7 +1121,7 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if badPolicy.Pass {
 		t.Fatal("expected mismatched runtime surface model policy check to fail")
 	}
-	for _, want := range []string{"expected=70000", "trigger=80000", "reserve=30000"} {
+	for _, want := range []string{"expected=56000", "trigger=80000", "reserve=30000"} {
 		if !strings.Contains(badPolicy.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", badPolicy.Detail, want)
 		}

@@ -117,11 +117,11 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 		CompactTriggerInputPercent: 80,
 	})
 	if reserved.ReservedOutputTokens != 30_000 ||
-		reserved.CompactTriggerInputTokens != 70_000 ||
+		reserved.CompactTriggerInputTokens != 56_000 ||
 		reserved.CompactHardInputLimitTokens != 70_000 ||
 		reserved.CompactSummaryPromptMaxBytes != agent.DefaultSummaryPromptMaxBytes ||
 		!reserved.ModelContextWindowAuto {
-		t.Fatalf("reserved compaction boundaries = %+v, want reserve=30000 trigger=70000 hard_limit=70000 summary_prompt=%d", reserved, agent.DefaultSummaryPromptMaxBytes)
+		t.Fatalf("reserved compaction boundaries = %+v, want reserve=30000 trigger=56000 hard_limit=70000 summary_prompt=%d", reserved, agent.DefaultSummaryPromptMaxBytes)
 	}
 	smallWindow := statsBoundarySnapshot(Config{
 		ModelContextWindowTokens:   200,
