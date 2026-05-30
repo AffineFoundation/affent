@@ -101,6 +101,18 @@ func (s Skill) activates(lowerUserText string) bool {
 	return false
 }
 
+func (s Skill) hasActivationRules() bool {
+	if s.Match != nil || s.AutoActivation.hasRules() {
+		return true
+	}
+	for _, trigger := range s.Triggers {
+		if strings.TrimSpace(trigger) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 type SkillAutoActivation struct {
 	// Any activates the skill when any phrase is present.
 	Any []string `json:"any,omitempty"`

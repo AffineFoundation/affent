@@ -2052,6 +2052,30 @@ func TestSkillToolInstallReportsAvailableRequiredTools(t *testing.T) {
 	}
 }
 
+func TestSkillToolInstallReportsInactiveWithoutActivationRules(t *testing.T) {
+	dir := t.TempDir()
+	reg := &SkillRegistry{}
+	tool := skillTool(reg, dir, nil)
+	args, err := json.Marshal(map[string]any{
+		"action": "install",
+		"name":   "manual_demo",
+		"body":   "AFFENT ACTIVE SKILL: manual_demo\nManual skill body.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("skill install: %v", err)
+	}
+	if !strings.Contains(out, "active_now=false") {
+		t.Fatalf("install output should not claim activation without triggers:\n%s", out)
+	}
+	if got := reg.Provide("manual demo"); got != "" {
+		t.Fatalf("triggerless skill should not auto-activate, got %q", got)
+	}
+}
+
 func TestSkillToolNormalizesActionCase(t *testing.T) {
 	dir := t.TempDir()
 	reg := &SkillRegistry{}
