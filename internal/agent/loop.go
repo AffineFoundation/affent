@@ -3644,17 +3644,17 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 }
 
 func (l *Loop) prepareToolDefsForRequest(ctx context.Context, turnID string, toolDefs []ToolDef, opts TurnOptions) []ToolDef {
-	l.compactBeforeRequest(ctx, turnID, toolDefs)
+	compacted := l.compactBeforeRequest(ctx, turnID, toolDefs)
 	if toolDefs == nil {
 		return nil
 	}
 	refreshed := l.toolDefs(opts)
-	if toolDefNamesEqual(toolDefs, refreshed) {
-		return refreshed
-	}
 	if l.requestPressureOverLimit(refreshed) {
-		l.compactRequestPressureUntilDiminishing(ctx, turnID, refreshed, 0)
+		compacted = l.compactRequestPressureUntilDiminishing(ctx, turnID, refreshed, 0) || compacted
 		refreshed = l.toolDefs(opts)
+	}
+	if compacted || !toolDefNamesEqual(toolDefs, refreshed) {
+		l.publishRuntimeSurface(turnID, opts)
 	}
 	return refreshed
 }
@@ -3742,20 +3742,20 @@ func (l *Loop) compactForRequestPressure(ctx context.Context, turnID string, too
 	return result
 }
 
-func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs []ToolDef) {
+func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs []ToolDef) bool {
 	// Proactive compaction is one pre-call phase with two inputs:
 	// persisted conversation pressure and whole-request pressure
 	// (conversation + tool schemas). Prefer request-pressure compaction
 	// when the whole request is already over policy so traces name the real
 	// trigger and the loop avoids threshold-plus-pressure double work.
 	if l.requestPressureOverLimit(toolDefs) {
-		l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 0)
-		return
+		return l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 0)
 	}
 	if !l.maybeCompactWithToolDefs(ctx, turnID, false, toolDefs) {
-		return
+		return false
 	}
 	l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 1)
+	return true
 }
 
 func (l *Loop) requestPressureOverLimit(toolDefs []ToolDef) bool {
@@ -3806,22 +3806,25 @@ func (l *Loop) requestPressureStatusForMessages(msgs []ChatMessage, toolDefs []T
 	return status
 }
 
-func (l *Loop) compactRequestPressureUntilDiminishing(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) {
+func (l *Loop) compactRequestPressureUntilDiminishing(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) bool {
 	const maxRequestPressureCompactions = 2
+	compacted := false
 	for i := 0; i < maxRequestPressureCompactions; i++ {
 		result := l.compactForRequestPressure(ctx, turnID, toolDefs, emergencyKeepFirst)
 		if !result.Compacted {
-			return
+			return compacted
 		}
+		compacted = true
 		if result.AfterEstimatedInputTokens <= 0 || result.AfterEstimatedInputTokens >= result.EstimatedInputTokens {
 			l.Log.Info().
 				Int("estimated_input_tokens", result.EstimatedInputTokens).
 				Int("after_estimated_input_tokens", result.AfterEstimatedInputTokens).
 				Int("trigger_input_tokens", result.TriggerInputTokens).
 				Msg("stopped request-pressure compaction after diminishing returns")
-			return
+			return compacted
 		}
 	}
+	return compacted
 }
 
 func (l *Loop) compactTriggerInputTokens() int {

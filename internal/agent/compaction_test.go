@@ -1546,10 +1546,12 @@ func TestPrepareToolDefsRefreshesSurfaceAfterCompaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	compactor := &toolSurfaceRefreshCompactor{}
+	events := make(chan sse.Event, 4)
 	loop := &Loop{
 		Tools:                     reg,
 		Conv:                      conv,
 		Compactor:                 compactor,
+		Events:                    events,
 		CompactTriggerInputTokens: trigger,
 	}
 
@@ -1565,12 +1567,50 @@ func TestPrepareToolDefsRefreshesSurfaceAfterCompaction(t *testing.T) {
 	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
 		t.Fatalf("compaction calls = %d, want one pre-request compaction", got)
 	}
+	surface := latestRuntimeSurfaceFromEvents(t, events)
+	if surface.ToolCount != 3 || surface.EstimatedRequestInputTokens > trigger {
+		t.Fatalf("refreshed runtime surface = %+v, want full surface within trigger", surface)
+	}
+	if got := runtimeSurfaceToolNames(surface.Tools); !reflect.DeepEqual(got, []string{"shell", "read_file", PlanToolName}) {
+		t.Fatalf("refreshed runtime surface tools = %#v", got)
+	}
 }
 
 func toolDefNames(defs []ToolDef) []string {
 	names := make([]string, 0, len(defs))
 	for _, def := range defs {
 		names = append(names, def.Function.Name)
+	}
+	return names
+}
+
+func latestRuntimeSurfaceFromEvents(t *testing.T, events <-chan sse.Event) sse.RuntimeSurfacePayload {
+	t.Helper()
+	var surface sse.RuntimeSurfacePayload
+	found := false
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type != sse.TypeRuntimeSurface {
+				continue
+			}
+			if err := json.Unmarshal(ev.Data, &surface); err != nil {
+				t.Fatalf("decode runtime.surface: %v", err)
+			}
+			found = true
+		default:
+			if !found {
+				t.Fatal("missing refreshed runtime.surface after compaction")
+			}
+			return surface
+		}
+	}
+}
+
+func runtimeSurfaceToolNames(tools []sse.RuntimeSurfaceTool) []string {
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		names = append(names, tool.Name)
 	}
 	return names
 }
