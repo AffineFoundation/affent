@@ -4009,13 +4009,19 @@ func evalCommandEnv(repoRoot string, extra ...string) []string {
 			continue
 		}
 		switch key {
-		case "GOROOT", "PATH":
+		case "GOROOT", "PATH", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL":
 			continue
 		default:
 			out = append(out, kv)
 		}
 	}
 	out = append(out, "PATH="+evalPath(repoRoot))
+	out = append(out,
+		"GIT_AUTHOR_NAME=Affent Eval",
+		"GIT_AUTHOR_EMAIL=affent-eval@example.invalid",
+		"GIT_COMMITTER_NAME=Affent Eval",
+		"GIT_COMMITTER_EMAIL=affent-eval@example.invalid",
+	)
 	out = append(out, extra...)
 	return out
 }

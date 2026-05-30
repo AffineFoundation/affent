@@ -31,6 +31,10 @@ func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
 func TestEvalCommandEnvScrubsGOROOTAndPinsPATH(t *testing.T) {
 	t.Setenv("GOROOT", "/poisoned/go")
 	t.Setenv("PATH", "/usr/bin")
+	t.Setenv("GIT_AUTHOR_NAME", "Host User")
+	t.Setenv("GIT_AUTHOR_EMAIL", "host@example.invalid")
+	t.Setenv("GIT_COMMITTER_NAME", "Host User")
+	t.Setenv("GIT_COMMITTER_EMAIL", "host@example.invalid")
 	repoRoot := filepath.Join(t.TempDir(), "repo")
 	env := evalCommandEnv(repoRoot)
 	if got := envValue(env, "GOROOT"); got != "" {
@@ -42,6 +46,16 @@ func TestEvalCommandEnvScrubsGOROOTAndPinsPATH(t *testing.T) {
 	}
 	if !strings.Contains(path, filepath.Join(repoRoot, ".tmp", "toolchains", "go", "bin")) {
 		t.Fatalf("PATH missing repo-local toolchain dir: %q", path)
+	}
+	for key, want := range map[string]string{
+		"GIT_AUTHOR_NAME":     "Affent Eval",
+		"GIT_AUTHOR_EMAIL":    "affent-eval@example.invalid",
+		"GIT_COMMITTER_NAME":  "Affent Eval",
+		"GIT_COMMITTER_EMAIL": "affent-eval@example.invalid",
+	} {
+		if got := envValue(env, key); got != want {
+			t.Fatalf("%s = %q, want %q", key, got, want)
+		}
 	}
 }
 
