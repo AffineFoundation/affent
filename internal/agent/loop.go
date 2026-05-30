@@ -324,6 +324,11 @@ type AutoCompactWindowState struct {
 const maxCompletionGuardInterventions = 2
 
 const (
+	runtimeControlReasonEnabledForTurn  = "enabled_for_turn"
+	runtimeControlReasonDisabledForTurn = "disabled_for_turn"
+)
+
+const (
 	UserModeNormal      = "normal"
 	UserModePlanOnly    = "plan_only"
 	UserModeExecutePlan = "execute_plan"
@@ -3156,6 +3161,7 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 	} else if len(l.completionGuardsForTurn(opts)) > 0 {
 		payload.CompletionGuards = []string{"custom"}
 	}
+	payload.LoopProtocolControl = l.loopProtocolControlForTurn(opts, toolSurface.Catalog)
 	if payload.ToolResultArtifactPrefix == "" {
 		payload.ToolResultArtifactPrefix = defaultArtifactPathPrefix
 	}
@@ -3188,6 +3194,29 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 		}
 	}
 	l.publish(sse.TypeRuntimeSurface, payload)
+}
+
+func (l *Loop) loopProtocolControlForTurn(opts TurnOptions, catalog []ToolCatalogEntry) *sse.RuntimeControlScope {
+	if l == nil {
+		return nil
+	}
+	configured := strings.TrimSpace(l.LoopProtocolPath) != "" ||
+		l.LoopProtocolSkillProvider != nil ||
+		len(l.LoopProtocolCompletionGuards) > 0 ||
+		catalogHasTool(catalog, LoopProtocolToolName)
+	if !configured && !opts.DisableLoopProtocol {
+		return nil
+	}
+	enabled := !opts.DisableLoopProtocol
+	reason := runtimeControlReasonEnabledForTurn
+	if !enabled {
+		reason = runtimeControlReasonDisabledForTurn
+	}
+	return &sse.RuntimeControlScope{
+		Enabled:       enabled,
+		ToolAvailable: enabled && catalogHasTool(catalog, LoopProtocolToolName),
+		Reason:        reason,
+	}
 }
 
 func (l *Loop) runtimeWorkspaceSurfaceForTurn(opts TurnOptions) *sse.RuntimeWorkspace {

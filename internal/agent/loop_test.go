@@ -2454,6 +2454,53 @@ func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeSurfaceReportsLoopProtocolControlScope(t *testing.T) {
+	events := make(chan sse.Event, 2)
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: LoopProtocolToolName, CatalogGroup: "Core"})
+	reg.Add(&Tool{Name: "read_file", CatalogGroup: "Workspace"})
+	loop := &Loop{
+		Tools:                             reg,
+		Events:                            events,
+		LoopProtocolPath:                  filepath.Join(t.TempDir(), "LOOP.md"),
+		LoopProtocolCompletionGuards:      []CompletionGuard{func() CompletionGuardResult { return CompletionGuardResult{} }},
+		LoopProtocolCompletionGuardLabels: []string{"loop_protocol_running"},
+		LoopProtocolSkillProvider:         func(string) string { return "AFFENT LOOP PROTOCOL:\n- status: running" },
+		CompletionGuardLabels:             []string{"active_plan_unfinished"},
+	}
+
+	loop.publishRuntimeSurface("turn-loop", TurnOptions{})
+	var enabled sse.RuntimeSurfacePayload
+	if err := json.Unmarshal((<-events).Data, &enabled); err != nil {
+		t.Fatalf("decode enabled runtime surface: %v", err)
+	}
+	if enabled.LoopProtocolControl == nil ||
+		!enabled.LoopProtocolControl.Enabled ||
+		!enabled.LoopProtocolControl.ToolAvailable ||
+		enabled.LoopProtocolControl.Reason != runtimeControlReasonEnabledForTurn ||
+		!enabled.Capabilities.LoopProtocol ||
+		!reflect.DeepEqual(enabled.CompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("enabled loop protocol control = control:%+v caps:%+v guards:%#v", enabled.LoopProtocolControl, enabled.Capabilities, enabled.CompletionGuards)
+	}
+
+	loop.publishRuntimeSurface("turn-timer", TurnOptions{
+		Tools:               reg.Without(LoopProtocolToolName),
+		DisableLoopProtocol: true,
+	})
+	var disabled sse.RuntimeSurfacePayload
+	if err := json.Unmarshal((<-events).Data, &disabled); err != nil {
+		t.Fatalf("decode disabled runtime surface: %v", err)
+	}
+	if disabled.LoopProtocolControl == nil ||
+		disabled.LoopProtocolControl.Enabled ||
+		disabled.LoopProtocolControl.ToolAvailable ||
+		disabled.LoopProtocolControl.Reason != runtimeControlReasonDisabledForTurn ||
+		disabled.Capabilities.LoopProtocol ||
+		!reflect.DeepEqual(disabled.CompletionGuards, []string{"active_plan_unfinished"}) {
+		t.Fatalf("disabled loop protocol control = control:%+v caps:%+v guards:%#v", disabled.LoopProtocolControl, disabled.Capabilities, disabled.CompletionGuards)
+	}
+}
+
 func TestPublishRuntimeSurfaceMarksUnlabeledCompletionGuards(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	loop := &Loop{

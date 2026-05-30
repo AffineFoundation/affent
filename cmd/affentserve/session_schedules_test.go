@@ -543,6 +543,24 @@ func TestSessionPool_RunDueSessionSchedulesOnceSerializesLoopTickAndTimer(t *tes
 		messages[1].ScheduleKind != sessionScheduleKindCustom {
 		t.Fatalf("scheduled messages = %+v, want loop and timer as separate serialized turns", messages)
 	}
+	surfaces := runtimeSurfacesByTurnID(t, pool, "serialized-schedules")
+	loopSurface, ok := surfaces[messages[0].TurnID]
+	if !ok {
+		t.Fatalf("missing runtime surface for loop turn %s", messages[0].TurnID)
+	}
+	if loopSurface.LoopProtocolControl == nil ||
+		!loopSurface.LoopProtocolControl.Enabled {
+		t.Fatalf("loop runtime surface = %+v, want loop protocol control enabled", loopSurface)
+	}
+	timerSurface, ok := surfaces[messages[1].TurnID]
+	if !ok {
+		t.Fatalf("missing runtime surface for timer turn %s", messages[1].TurnID)
+	}
+	if timerSurface.LoopProtocolControl == nil ||
+		timerSurface.LoopProtocolControl.Enabled ||
+		timerSurface.Capabilities.LoopProtocol {
+		t.Fatalf("timer runtime surface = %+v, want loop protocol control disabled", timerSurface)
+	}
 }
 
 func TestSessionPool_ClaimScheduleDoesNotAdvanceBeforeTurnEnd(t *testing.T) {
@@ -1023,6 +1041,28 @@ func scheduleUserMessages(t *testing.T, pool *SessionPool, sessionID string) []s
 		}
 	}
 	return messages
+}
+
+func runtimeSurfacesByTurnID(t *testing.T, pool *SessionPool, sessionID string) map[string]sse.RuntimeSurfacePayload {
+	t.Helper()
+	history, err := readSessionHistory(pool.sessionDirPath(sessionID), sessionID, -1, 100)
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	surfaces := map[string]sse.RuntimeSurfacePayload{}
+	for _, ev := range history.Events {
+		if ev.Type != sse.TypeRuntimeSurface {
+			continue
+		}
+		var payload sse.RuntimeSurfacePayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode runtime.surface: %v", err)
+		}
+		if payload.TurnID != "" {
+			surfaces[payload.TurnID] = payload
+		}
+	}
+	return surfaces
 }
 
 func waitScheduleToolResult(t *testing.T, pool *SessionPool, sessionID, callID string) sse.ToolResultPayload {

@@ -82,6 +82,7 @@ type RuntimeSurfacePayload struct {
 	ExcludedTools                      []RuntimeSurfaceTool `json:"excluded_tools,omitempty"`
 	ToolCallCaps                       []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
 	CompletionGuards                   []string             `json:"completion_guards,omitempty"`
+	LoopProtocolControl                *RuntimeControlScope `json:"loop_protocol_control,omitempty"`
 	Capabilities                       RuntimeCapabilities  `json:"capabilities"`
 	Workspace                          *RuntimeWorkspace    `json:"workspace,omitempty"`
 	MaxTurnSteps                       int                  `json:"max_turn_steps,omitempty"`
@@ -147,6 +148,12 @@ type RuntimeToolArgPolicy struct {
 type RuntimeToolCallCap struct {
 	Tool string `json:"tool"`
 	Max  int    `json:"max"`
+}
+
+type RuntimeControlScope struct {
+	Enabled       bool   `json:"enabled"`
+	ToolAvailable bool   `json:"tool_available,omitempty"`
+	Reason        string `json:"reason,omitempty"`
 }
 
 type RuntimeCapabilities struct {
