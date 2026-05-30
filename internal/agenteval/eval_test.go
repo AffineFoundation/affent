@@ -163,6 +163,12 @@ func TestEvalSessionScheduleToolCreatePersistsSchedule(t *testing.T) {
 	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"create"}`), `{}`, false); got != sse.RuntimeSurfaceRefreshSchedulesChanged {
 		t.Fatalf("create refresh = %q, want %q", got, sse.RuntimeSurfaceRefreshSchedulesChanged)
 	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"update"}`), `{}`, false); got != sse.RuntimeSurfaceRefreshSchedulesChanged {
+		t.Fatalf("update refresh = %q, want %q", got, sse.RuntimeSurfaceRefreshSchedulesChanged)
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"delete"}`), `{}`, false); got != sse.RuntimeSurfaceRefreshSchedulesChanged {
+		t.Fatalf("delete refresh = %q, want %q", got, sse.RuntimeSurfaceRefreshSchedulesChanged)
+	}
 	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"list"}`), `{}`, false); got != "" {
 		t.Fatalf("list refresh = %q, want empty", got)
 	}
@@ -195,6 +201,60 @@ func TestEvalSessionScheduleToolCreatePersistsSchedule(t *testing.T) {
 		if !strings.Contains(string(raw), want) {
 			t.Fatalf("persisted schedule missing %q:\n%s", want, raw)
 		}
+	}
+}
+
+func TestEvalSessionScheduleToolUpdateAndDelete(t *testing.T) {
+	workspace := t.TempDir()
+	for _, prompt := range []string{"Inspect launch metrics.", "Inspect launch notes."} {
+		if _, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
+			"action":"create",
+			"kind":"custom",
+			"prompt":"`+prompt+`",
+			"next_run_at":"2030-01-02T15:04:05Z",
+			"repeat_interval_seconds":1800,
+			"enabled":true
+		}`)); err != nil {
+			t.Fatalf("create schedule %q: %v", prompt, err)
+		}
+	}
+
+	paused, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
+		"action":"update",
+		"schedule_id":"sched_eval_001",
+		"enabled":false
+	}`))
+	if err != nil {
+		t.Fatalf("pause schedule: %v", err)
+	}
+	if !strings.Contains(paused, `"id": "sched_eval_001"`) ||
+		!strings.Contains(paused, `"enabled": false`) ||
+		!strings.Contains(paused, `"enabled": 1`) ||
+		!strings.Contains(paused, `"next_schedule_id": "sched_eval_002"`) {
+		t.Fatalf("pause result missing durable update evidence:\n%s", paused)
+	}
+
+	deleted, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
+		"action":"delete",
+		"schedule_id":"sched_eval_002"
+	}`))
+	if err != nil {
+		t.Fatalf("delete schedule: %v", err)
+	}
+	if strings.Contains(deleted, "sched_eval_002") ||
+		!strings.Contains(deleted, `"count": 1`) ||
+		!strings.Contains(deleted, `"enabled": 0`) {
+		t.Fatalf("delete result = %s, want only paused schedule remaining", deleted)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(workspace, evalSessionSchedulesRelPath))
+	if err != nil {
+		t.Fatalf("read persisted schedules: %v", err)
+	}
+	if strings.Contains(string(raw), "sched_eval_002") ||
+		!strings.Contains(string(raw), `"id": "sched_eval_001"`) ||
+		!strings.Contains(string(raw), `"enabled": false`) {
+		t.Fatalf("persisted schedules after delete:\n%s", raw)
 	}
 }
 

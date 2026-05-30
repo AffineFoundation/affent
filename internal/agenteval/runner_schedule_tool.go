@@ -23,6 +23,7 @@ const evalSessionScheduleLoopTickUnavailableFailureKind = "session_schedule_loop
 
 type evalSessionScheduleToolArgs struct {
 	Action                string `json:"action"`
+	ScheduleID            string `json:"schedule_id"`
 	Kind                  string `json:"kind"`
 	Prompt                string `json:"prompt"`
 	DisplayText           string `json:"display_text"`
@@ -72,18 +73,19 @@ func registerEvalSessionScheduleTool(reg *agent.Registry, workspaceDir string) {
 		"additionalProperties": false,
 		"required": ["action"],
 		"properties": {
-			"action": {"type": "string", "enum": ["list", "create"], "description": "Use create for a future or recurring scheduled session turn. Use list to inspect saved schedules."},
+			"action": {"type": "string", "enum": ["list", "create", "update", "delete"], "description": "Use create for a future or recurring scheduled session turn. Use list/update/delete to inspect, pause/resume, or remove saved schedules."},
+			"schedule_id": {"type": "string", "maxLength": 64, "description": "Required for update and delete."},
 			"kind": {"type": "string", "enum": ["custom", "checkin", "daily_checkin", "loop_tick"], "description": "Schedule category. Timers do not require LOOP.md. Use loop_tick only when the scheduled turn nudges an already-running loop protocol; otherwise use custom/checkin/daily_checkin."},
 			"prompt": {"type": "string", "maxLength": 8000, "description": "Exact user message to inject when the schedule fires. Required for create."},
 			"display_text": {"type": "string", "maxLength": 512, "description": "Optional compact label shown in history instead of the full prompt."},
 			"next_run_at": {"type": "string", "description": "RFC3339 UTC timestamp for the next run. Required for create."},
 			"repeat_interval_seconds": {"type": "integer", "minimum": 0, "description": "0 for one-shot, or a repeat interval of at least 60 seconds."},
-			"enabled": {"type": "boolean", "description": "Create enabled by default."}
+			"enabled": {"type": "boolean", "description": "Create enabled by default. Required for update to pause or resume."}
 		}
 	}`)
 	reg.Add(&agent.Tool{
 		Name:                  agent.SessionScheduleToolName,
-		Description:           "Create or list eval session scheduled turns. This mirrors the serve runtime's timer semantics for eval scenarios: ordinary timers and recurring checks use session_schedule and do not require LOOP.md.",
+		Description:           "Create, list, pause/resume, or delete eval session scheduled turns. This mirrors the serve runtime's timer semantics for eval scenarios: ordinary timers and recurring checks use session_schedule and do not require LOOP.md.",
 		Schema:                schema,
 		RuntimeSurfaceRefresh: evalSessionScheduleRuntimeSurfaceRefresh,
 		CatalogGroup:          "Core",
@@ -103,10 +105,12 @@ func evalSessionScheduleRuntimeSurfaceRefresh(args json.RawMessage, _ string, is
 	if err := json.Unmarshal(args, &req); err != nil {
 		return ""
 	}
-	if strings.ToLower(strings.TrimSpace(req.Action)) == "create" {
+	switch strings.ToLower(strings.TrimSpace(req.Action)) {
+	case "create", "update", "delete":
 		return sse.RuntimeSurfaceRefreshSchedulesChanged
+	default:
+		return ""
 	}
-	return ""
 }
 
 func executeEvalSessionScheduleTool(ctx context.Context, workspaceDir string, args json.RawMessage) (string, error) {
@@ -122,10 +126,14 @@ func executeEvalSessionScheduleTool(ctx context.Context, workspaceDir string, ar
 		return evalSessionScheduleToolList(workspaceDir)
 	case "create":
 		return evalSessionScheduleToolCreate(workspaceDir, parsed)
+	case "update":
+		return evalSessionScheduleToolUpdate(workspaceDir, parsed)
+	case "delete":
+		return evalSessionScheduleToolDelete(workspaceDir, parsed)
 	case "":
-		return "", errors.New("action is required\nNext: retry session_schedule with action=list or action=create")
+		return "", errors.New("action is required\nNext: retry session_schedule with action=list, action=create, action=update, or action=delete")
 	default:
-		return "", fmt.Errorf("unsupported action %q (valid: list, create)", action)
+		return "", fmt.Errorf("unsupported action %q (valid: list, create, update, delete)", action)
 	}
 }
 
@@ -197,6 +205,71 @@ func evalSessionScheduleToolCreate(workspaceDir string, parsed evalSessionSchedu
 		CreatedAt:             now,
 		UpdatedAt:             now,
 	})
+	if err := writeEvalSessionSchedulesFile(workspaceDir, file); err != nil {
+		return "", err
+	}
+	return marshalEvalSessionScheduleResponse(file)
+}
+
+func evalSessionScheduleToolUpdate(workspaceDir string, parsed evalSessionScheduleToolArgs) (string, error) {
+	if parsed.Enabled == nil {
+		return "", errors.New("enabled is required for update")
+	}
+	scheduleID := strings.TrimSpace(parsed.ScheduleID)
+	if scheduleID == "" {
+		return "", errors.New("schedule_id is required for update")
+	}
+	file, err := readEvalSessionSchedulesFile(workspaceDir)
+	if err != nil {
+		return "", err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	updated := false
+	for i := range file.Schedules {
+		if file.Schedules[i].ID != scheduleID {
+			continue
+		}
+		if *parsed.Enabled && file.Schedules[i].Kind == "loop_tick" && !evalWorkspaceHasRunningLoopProtocol(workspaceDir) {
+			return "", errors.New("loop_tick requires a running LOOP.md.\n" +
+				"Next: activate the loop protocol before retrying loop_tick, or use custom/checkin/daily_checkin for ordinary eval timers.\n" +
+				"Failure: kind=" + evalSessionScheduleLoopTickUnavailableFailureKind)
+		}
+		file.Schedules[i].Enabled = *parsed.Enabled
+		file.Schedules[i].UpdatedAt = now
+		updated = true
+		break
+	}
+	if !updated {
+		return "", errors.New("session schedule not found")
+	}
+	if err := writeEvalSessionSchedulesFile(workspaceDir, file); err != nil {
+		return "", err
+	}
+	return marshalEvalSessionScheduleResponse(file)
+}
+
+func evalSessionScheduleToolDelete(workspaceDir string, parsed evalSessionScheduleToolArgs) (string, error) {
+	scheduleID := strings.TrimSpace(parsed.ScheduleID)
+	if scheduleID == "" {
+		return "", errors.New("schedule_id is required for delete")
+	}
+	file, err := readEvalSessionSchedulesFile(workspaceDir)
+	if err != nil {
+		return "", err
+	}
+	next := file.Schedules[:0]
+	deleted := false
+	for _, schedule := range file.Schedules {
+		if schedule.ID == scheduleID {
+			deleted = true
+			continue
+		}
+		next = append(next, schedule)
+	}
+	if !deleted {
+		return "", errors.New("session schedule not found")
+	}
+	file.Schedules = next
 	if err := writeEvalSessionSchedulesFile(workspaceDir, file); err != nil {
 		return "", err
 	}
