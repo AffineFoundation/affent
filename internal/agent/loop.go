@@ -383,6 +383,21 @@ type TurnOptions struct {
 	DisableLoopProtocol bool
 }
 
+func (opts TurnOptions) ApplyScheduledTurnScope(tools *Registry) TurnOptions {
+	if strings.TrimSpace(opts.UserSource) != "schedule" {
+		return opts
+	}
+	kind := strings.TrimSpace(opts.ScheduleKind)
+	if kind == "" || kind == SessionScheduleKindLoopTick {
+		return opts
+	}
+	opts.DisableLoopProtocol = true
+	if opts.Tools == nil && tools != nil {
+		opts.Tools = tools.Without(LoopProtocolToolName)
+	}
+	return opts
+}
+
 type FirstToolPolicy struct {
 	ToolName  string
 	Trigger   func(userText string) bool

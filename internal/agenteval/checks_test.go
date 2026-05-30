@@ -1026,10 +1026,17 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 56000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
+		{TurnID: "loop", LoopProtocolControl: &sse.RuntimeControlScope{Enabled: true, ToolAvailable: true, Reason: "enabled_for_turn"}, RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 56000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
+		{TurnID: "timer", LoopProtocolControl: &sse.RuntimeControlScope{Enabled: false, Reason: "disabled_for_turn"}},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
+	}
+	if res := RuntimeSurfaceLoopProtocolControl("enabled").Eval(trace); !res.Pass {
+		t.Fatalf("expected enabled loop protocol control check to pass: %+v", res)
+	}
+	if res := RuntimeSurfaceLoopProtocolControl("disabled").Eval(trace); !res.Pass {
+		t.Fatalf("expected disabled loop protocol control check to pass: %+v", res)
 	}
 	if res := RuntimeSurfaceMaxTurnInputTokens(300000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface input budget check to pass: %+v", res)
@@ -1171,6 +1178,15 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 		t.Fatal("expected missing runtime surface completion guard to fail")
 	}
 	for _, want := range []string{"missing_guard", "active_plan_unfinished", "loop_protocol_running"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
+		}
+	}
+	res = RuntimeSurfaceLoopProtocolControl("paused").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing loop protocol control state to fail")
+	}
+	for _, want := range []string{"loop_protocol_control=paused", "control=enabled", "control=disabled"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
 		}

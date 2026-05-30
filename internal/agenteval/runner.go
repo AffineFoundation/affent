@@ -223,7 +223,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	promptOptions := runnerScenarioPromptOptions(s, len(prompts))
 	trace := newRunnerTrace(s, workspace, runnerPromptDisplay(prompts))
 	for idx, prompt := range prompts {
-		turnID, err := loop.SendUserWithOptions(ctx, prompt, promptOptions[idx].turnOptions())
+		turnID, err := loop.SendUserWithOptions(ctx, prompt, promptOptions[idx].turnOptions().ApplyScheduledTurnScope(reg))
 		if err != nil {
 			return Outcome{}, fmt.Errorf("send user: %w", err)
 		}

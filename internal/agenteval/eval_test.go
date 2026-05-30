@@ -664,6 +664,12 @@ func TestBatchScenarioPromptHelpers(t *testing.T) {
 	if got := batchScenarioPromptOptions(BatchScenario{PromptOptions: opts}, 2); len(got) != 2 || got[0].UserSource != "schedule" || got[0].ScheduleID != "sched_1" || got[1] != (PromptOptions{}) {
 		t.Fatalf("prompt options = %#v", got)
 	}
+	if got := (PromptOptions{UserSource: "schedule", ScheduleKind: "custom"}).turnOptions(); !got.DisableLoopProtocol {
+		t.Fatalf("scheduled custom turn options = %+v, want loop protocol disabled", got)
+	}
+	if got := (PromptOptions{UserSource: "schedule", ScheduleKind: agent.SessionScheduleKindLoopTick}).turnOptions(); got.DisableLoopProtocol {
+		t.Fatalf("scheduled loop_tick options = %+v, want loop protocol enabled", got)
+	}
 	display := batchScenarioPromptDisplay(multi)
 	for _, want := range []string{"Turn 1:", "first", "Turn 2:", "second"} {
 		if !strings.Contains(display, want) {
@@ -3933,6 +3939,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if scheduledTurn.RequiredTaskStateRequestSource != "schedule" ||
 		scheduledTurn.RequiredTaskStateScheduleID != "sched_eval_fire" ||
 		scheduledTurn.RequiredTaskStateScheduleKind != "custom" ||
+		scheduledTurn.RequiredRuntimeLoopProtocolControl != "disabled" ||
 		scheduledTurn.RequiredContextInjectionSources["schedule"] != 1 {
 		t.Fatalf("scheduled turn provenance requirements = source:%q schedule:%q/%q context:%#v",
 			scheduledTurn.RequiredTaskStateRequestSource,
@@ -3943,6 +3950,10 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(scheduledTurn.ForbiddenTools, agent.SessionScheduleToolName) ||
 		!stringSliceContains(scheduledTurn.ForbiddenTools, agent.LoopProtocolToolName) {
 		t.Fatalf("scheduled turn ForbiddenTools = %#v, want no schedule management or loop protocol", scheduledTurn.ForbiddenTools)
+	}
+	scheduledTurnChecks := checkNamesFor(BatchScenarioChecks(scheduledTurn))
+	if !stringSliceContains(scheduledTurnChecks, "runtime_surface_loop_protocol_control:disabled") {
+		t.Fatalf("scheduled turn checks = %#v, want runtime loop protocol control", scheduledTurnChecks)
 	}
 	scheduledTurnCaps := ExpectationCapabilityNames(debugScenarioExpectations(scheduledTurn))
 	if !stringSliceContains(scheduledTurnCaps, "session") || !stringSliceContains(scheduledTurnCaps, "trace") {

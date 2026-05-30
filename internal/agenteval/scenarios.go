@@ -2369,10 +2369,11 @@ func longRunScheduledTurnProvenanceScenario() BatchScenario {
 		RequiredUserMessageModes: map[string]int{
 			agent.UserModeNormal: 1,
 		},
-		RequiredTaskStateRequestMode:   agent.UserModeNormal,
-		RequiredTaskStateRequestSource: "schedule",
-		RequiredTaskStateScheduleID:    "sched_eval_fire",
-		RequiredTaskStateScheduleKind:  "custom",
+		RequiredTaskStateRequestMode:       agent.UserModeNormal,
+		RequiredTaskStateRequestSource:     "schedule",
+		RequiredTaskStateScheduleID:        "sched_eval_fire",
+		RequiredTaskStateScheduleKind:      "custom",
+		RequiredRuntimeLoopProtocolControl: "disabled",
 		RequiredContextInjectionSources: map[string]int{
 			"schedule": 1,
 		},

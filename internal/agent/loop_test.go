@@ -1151,6 +1151,35 @@ func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	}
 }
 
+func TestTurnOptionsApplyScheduledTurnScopeDisablesLoopForTimers(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: LoopProtocolToolName})
+	reg.Add(&Tool{Name: "read_file"})
+
+	timer := TurnOptions{UserSource: "schedule", ScheduleKind: "custom"}.ApplyScheduledTurnScope(reg)
+	if !timer.DisableLoopProtocol {
+		t.Fatal("ordinary scheduled turn should disable loop protocol control")
+	}
+	if timer.Tools == nil {
+		t.Fatal("ordinary scheduled turn should receive a narrowed tool surface")
+	}
+	if _, ok := timer.Tools.Get(LoopProtocolToolName); ok {
+		t.Fatalf("ordinary scheduled turn still exposes %s", LoopProtocolToolName)
+	}
+	if _, ok := timer.Tools.Get("read_file"); !ok {
+		t.Fatal("ordinary scheduled turn dropped unrelated read_file tool")
+	}
+
+	loopTick := TurnOptions{UserSource: "schedule", ScheduleKind: SessionScheduleKindLoopTick}.ApplyScheduledTurnScope(reg)
+	if loopTick.DisableLoopProtocol || loopTick.Tools != nil {
+		t.Fatalf("loop_tick options = %+v, want loop protocol control preserved", loopTick)
+	}
+	manual := TurnOptions{ScheduleKind: "custom"}.ApplyScheduledTurnScope(reg)
+	if manual.DisableLoopProtocol || manual.Tools != nil {
+		t.Fatalf("manual options = %+v, want unchanged", manual)
+	}
+}
+
 func TestLoopDefaultMaxToolCallsTracksEffectiveTurnSteps(t *testing.T) {
 	if got := (&Loop{}).maxToolCallsForTurn(TurnOptions{}); got != DefaultMaxTurnSteps {
 		t.Fatalf("default max tool calls = %d, want %d", got, DefaultMaxTurnSteps)

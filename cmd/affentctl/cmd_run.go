@@ -98,6 +98,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 	turnOpts.UserDisplayText = strings.TrimSpace(*userDisplayText)
 	turnOpts.ScheduleID = strings.TrimSpace(*scheduleID)
 	turnOpts.ScheduleKind = strings.TrimSpace(*scheduleKind)
+	turnOpts = turnOpts.ApplyScheduledTurnScope(b.loop.Tools)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

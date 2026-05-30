@@ -16,6 +16,11 @@ import (
 // but the name is shared so traces and capability summaries do not drift.
 const SessionScheduleToolName = "session_schedule"
 
+// SessionScheduleKindLoopTick is the structured schedule kind that advances
+// the long-running loop protocol control plane. Other schedule kinds are
+// ordinary timers/check-ins and should not receive loop-protocol control scope.
+const SessionScheduleKindLoopTick = "loop_tick"
+
 // SessionWorkspaceToolName is the optional runtime tool that lets a session
 // inspect or switch its active workspace within the configured root.
 const SessionWorkspaceToolName = "session_workspace"

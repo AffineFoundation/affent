@@ -79,7 +79,7 @@ func (o PromptOptions) turnOptions() agent.TurnOptions {
 		UserDisplayText: strings.TrimSpace(o.UserDisplayText),
 		ScheduleID:      strings.TrimSpace(o.ScheduleID),
 		ScheduleKind:    strings.TrimSpace(o.ScheduleKind),
-	}
+	}.ApplyScheduledTurnScope(nil)
 }
 
 // Check is one named binary assertion over a Trace. Checks should be

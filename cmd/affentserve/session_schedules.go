@@ -39,7 +39,7 @@ const (
 	sessionScheduleKindCustom       = "custom"
 	sessionScheduleKindCheckIn      = "checkin"
 	sessionScheduleKindDailyCheckIn = "daily_checkin"
-	sessionScheduleKindLoopTick     = "loop_tick"
+	sessionScheduleKindLoopTick     = agent.SessionScheduleKindLoopTick
 
 	sessionScheduleLoopTickUnavailableFailureKind = "session_schedule_loop_tick_unavailable"
 	sessionScheduleTurnFailedFailureKind          = "session_schedule_turn_failed"
@@ -982,13 +982,10 @@ func sessionScheduleTurnOptions(sess *Session, run sessionScheduleRun) agent.Tur
 		ScheduleID:      run.ScheduleID,
 		ScheduleKind:    run.ScheduleKind,
 	}
-	if run.ScheduleKind != sessionScheduleKindLoopTick {
-		opts.DisableLoopProtocol = true
-		if sess != nil && sess.registry != nil {
-			opts.Tools = sess.registry.Without(agent.LoopProtocolToolName)
-		}
+	if sess == nil {
+		return opts.ApplyScheduledTurnScope(nil)
 	}
-	return opts
+	return opts.ApplyScheduledTurnScope(sess.registry)
 }
 
 func (s *Session) observeScheduledTurn(ev sse.Event) {

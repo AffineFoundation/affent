@@ -1114,6 +1114,42 @@ func RuntimeSurfaceCompletionGuard(name string) Check {
 	}
 }
 
+func RuntimeSurfaceLoopProtocolControl(required string) Check {
+	required = strings.TrimSpace(strings.ToLower(required))
+	return Check{
+		Name: "runtime_surface_loop_protocol_control:" + previewSubstr(required, 48),
+		Eval: func(t Trace) CheckResult {
+			if required == "" {
+				return CheckResult{Pass: true}
+			}
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.LoopProtocolControl == nil {
+					observed = append(observed, fmt.Sprintf("turn=%s control=missing", surface.TurnID))
+					continue
+				}
+				state := "disabled"
+				if surface.LoopProtocolControl.Enabled {
+					state = "enabled"
+				}
+				observed = append(observed, fmt.Sprintf("turn=%s control=%s tool_available=%t reason=%s",
+					surface.TurnID,
+					state,
+					surface.LoopProtocolControl.ToolAvailable,
+					strings.TrimSpace(surface.LoopProtocolControl.Reason),
+				))
+				if state == required {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("loop_protocol_control=%s", required)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface loop_protocol_control=%s; observed=%v", required, observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceMaxTurnInputTokens(expected int) Check {
 	return Check{
 		Name: fmt.Sprintf("runtime_surface_max_turn_input_tokens:%d", expected),
