@@ -503,6 +503,7 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 	ab := agent.DefaultRuntimeBoundaries()
 	mb := mcp.DefaultRuntimeBoundaries()
 	mem := memory.DefaultRuntimeBoundaries()
+	compactionPolicy := summaryCompactorPolicyForConfig(cfg)
 	maxTurnSteps := cfg.MaxTurnSteps
 	if maxTurnSteps <= 0 {
 		maxTurnSteps = agent.DefaultMaxTurnSteps
@@ -529,9 +530,9 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		ModelContextWindowSource:           modelContextWindowSourceForConfig(cfg),
 		ModelContextWindowEffectivePercent: cfg.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
-		CompactTriggerInputTokens:          compactTriggerInputTokensForConfig(cfg),
+		CompactTriggerInputTokens:          compactionPolicy.TriggerInputTokens,
 		CompactTriggerInputPercent:         compactTriggerInputPercentForConfig(cfg),
-		CompactSummaryPromptMaxBytes:       compactSummaryPromptMaxBytesForConfig(cfg),
+		CompactSummaryPromptMaxBytes:       compactionPolicy.MaxPromptBytes,
 		PerCallTimeout:                     perCallTimeout.String(),
 		LLMRequestBodyBytes:                ab.LLMRequestBodyBytes,
 		LLMErrorBodyBytes:                  ab.LLMErrorBodyBytes,

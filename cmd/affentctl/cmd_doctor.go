@@ -110,10 +110,15 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 		llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
 		c = resolveAffentctlModelContextWindowFromProvider(c, llm, zerolog.Nop())
 	}
-	trigger, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
-	triggerBytes := agent.CompactTriggerBytesForModelPolicy(c.compactTriggerInputTokens, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(sampling), agent.DefaultSummaryTriggerBytes)
-	triggerInputTokens := agent.CompactTriggerInputTokensForModelPolicy(c.compactTriggerInputTokens, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(sampling), agent.DefaultSummaryTriggerInputTokens)
-	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d trigger_input_tokens=%d keep_last=%d", trigger, triggerBytes, triggerInputTokens, keepLast))
+	compaction := agent.ResolveSummaryCompactorPolicy(agent.SummaryCompactorPolicy{
+		TriggerMsgs:                c.compactTrigger,
+		TriggerInputTokens:         c.compactTriggerInputTokens,
+		ModelContextWindowTokens:   c.modelContextWindowTokens,
+		CompactTriggerInputPercent: c.compactTriggerPercent,
+		ReservedOutputTokens:       reservedOutputTokensFromSampling(sampling),
+		KeepLast:                   c.compactKeepLast,
+	})
+	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d trigger_input_tokens=%d keep_last=%d", compaction.TriggerMsgs, compaction.TriggerBytes, compaction.TriggerInputTokens, compaction.KeepLast))
 	add("ok", "boundaries", doctorBoundarySummary(c))
 	add("ok", "capabilities", doctorCapabilitySummary(c))
 	if status, msg := doctorSystemPrompt(c.systemPromptPath); status != "" {

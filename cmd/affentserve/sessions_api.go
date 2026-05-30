@@ -1470,10 +1470,8 @@ func workspaceLabel(path string) string {
 }
 
 func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEstimate, cfg Config) sessionContextSummary {
-	trigger := cfg.CompactTrigger
-	if trigger <= 0 {
-		trigger = agent.DefaultSummaryTriggerMsgs
-	}
+	compactionPolicy := summaryCompactorPolicyForConfig(cfg)
+	trigger := compactionPolicy.TriggerMsgs
 	remaining := trigger - messageCount
 	if remaining < 0 {
 		remaining = 0
@@ -1484,7 +1482,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 	}
 	contextBytes := inputEstimate.ConversationBytes
 	estimatedRequestInputTokens := inputEstimate.EstimatedInputTokens
-	byteTrigger := compactTriggerBytesForConfig(cfg)
+	byteTrigger := compactionPolicy.TriggerBytes
 	bytesUntilCompact := byteTrigger - contextBytes
 	if bytesUntilCompact < 0 {
 		bytesUntilCompact = 0
@@ -1493,7 +1491,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 	if byteTrigger > 0 && contextBytes > 0 {
 		bytePercent = (contextBytes*100 + byteTrigger/2) / byteTrigger
 	}
-	inputTrigger := compactTriggerInputTokensForConfig(cfg)
+	inputTrigger := compactionPolicy.TriggerInputTokens
 	inputTokensUntilCompact := inputTrigger - estimatedRequestInputTokens
 	if inputTokensUntilCompact < 0 {
 		inputTokensUntilCompact = 0
@@ -1531,7 +1529,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputPercent:         compactTriggerInputPercentForConfig(cfg),
 		CompactTriggerInputTokens:          inputTrigger,
-		CompactSummaryPromptMaxBytes:       compactSummaryPromptMaxBytesForConfig(cfg),
+		CompactSummaryPromptMaxBytes:       compactionPolicy.MaxPromptBytes,
 		RequestInputCompactPercent:         inputPercent,
 		RequestInputTokensUntilCompact:     inputTokensUntilCompact,
 	}
@@ -1543,18 +1541,26 @@ func sessionToolSchemaBudgetTokens(messages []agent.ChatMessage, cfg Config) int
 }
 
 func compactTriggerInputTokensForConfig(cfg Config) int {
-	return agent.CompactTriggerInputTokensForModelPolicy(cfg.CompactTriggerInputTokens, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryTriggerInputTokens)
+	return summaryCompactorPolicyForConfig(cfg).TriggerInputTokens
 }
 
 func compactTriggerBytesForConfig(cfg Config) int {
-	if cfg.ModelContextWindowTokens > 0 && cfg.CompactTriggerInputTokens == 0 {
-		return agent.CompactTriggerBytesForModelPolicy(0, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryTriggerBytes)
-	}
-	return agent.DefaultSummaryTriggerBytes
+	return summaryCompactorPolicyForConfig(cfg).TriggerBytes
 }
 
 func compactSummaryPromptMaxBytesForConfig(cfg Config) int {
-	return agent.SummaryPromptMaxBytesForModelPolicy(cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryPromptMaxBytes)
+	return summaryCompactorPolicyForConfig(cfg).MaxPromptBytes
+}
+
+func summaryCompactorPolicyForConfig(cfg Config) agent.ResolvedSummaryCompactorPolicy {
+	return agent.ResolveSummaryCompactorPolicy(agent.SummaryCompactorPolicy{
+		TriggerMsgs:                cfg.CompactTrigger,
+		TriggerInputTokens:         cfg.CompactTriggerInputTokens,
+		ModelContextWindowTokens:   cfg.ModelContextWindowTokens,
+		CompactTriggerInputPercent: cfg.CompactTriggerInputPercent,
+		ReservedOutputTokens:       reservedOutputTokensForConfig(cfg),
+		KeepLast:                   cfg.CompactKeepLast,
+	})
 }
 
 func modelContextWindowSourceForConfig(cfg Config) string {

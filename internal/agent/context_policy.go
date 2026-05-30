@@ -121,7 +121,15 @@ type SummaryCompactorPolicy struct {
 	KeepLast                   int
 }
 
-func NewLLMSummaryCompactorForPolicy(policy SummaryCompactorPolicy) *LLMSummaryCompactor {
+type ResolvedSummaryCompactorPolicy struct {
+	TriggerMsgs        int
+	TriggerBytes       int
+	TriggerInputTokens int
+	KeepLast           int
+	MaxPromptBytes     int
+}
+
+func ResolveSummaryCompactorPolicy(policy SummaryCompactorPolicy) ResolvedSummaryCompactorPolicy {
 	triggerMsgs := policy.TriggerMsgs
 	if triggerMsgs <= 0 {
 		triggerMsgs = DefaultSummaryTriggerMsgs
@@ -140,18 +148,36 @@ func NewLLMSummaryCompactorForPolicy(policy SummaryCompactorPolicy) *LLMSummaryC
 			DefaultSummaryTriggerBytes,
 		)
 	}
+	triggerInputTokens := CompactTriggerInputTokensForModelPolicy(
+		policy.TriggerInputTokens,
+		policy.ModelContextWindowTokens,
+		policy.CompactTriggerInputPercent,
+		policy.ReservedOutputTokens,
+		DefaultSummaryTriggerInputTokens,
+	)
 	maxSummaryPromptBytes := SummaryPromptMaxBytesForModelPolicy(
 		policy.ModelContextWindowTokens,
 		policy.CompactTriggerInputPercent,
 		policy.ReservedOutputTokens,
 		DefaultSummaryPromptMaxBytes,
 	)
+	return ResolvedSummaryCompactorPolicy{
+		TriggerMsgs:        triggerMsgs,
+		TriggerBytes:       triggerBytes,
+		TriggerInputTokens: triggerInputTokens,
+		KeepLast:           keepLast,
+		MaxPromptBytes:     maxSummaryPromptBytes,
+	}
+}
+
+func NewLLMSummaryCompactorForPolicy(policy SummaryCompactorPolicy) *LLMSummaryCompactor {
+	resolved := ResolveSummaryCompactorPolicy(policy)
 	return &LLMSummaryCompactor{
 		LLM:            policy.LLM,
-		TriggerMsgs:    triggerMsgs,
-		TriggerBytes:   triggerBytes,
-		KeepLast:       keepLast,
-		MaxPromptBytes: maxSummaryPromptBytes,
+		TriggerMsgs:    resolved.TriggerMsgs,
+		TriggerBytes:   resolved.TriggerBytes,
+		KeepLast:       resolved.KeepLast,
+		MaxPromptBytes: resolved.MaxPromptBytes,
 	}
 }
 
