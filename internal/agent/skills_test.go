@@ -735,6 +735,9 @@ func TestSkillRegistry_CustomSkillExtensionPoint(t *testing.T) {
 		if !catalog[0].AutoActivates {
 			t.Fatalf("Catalog AutoActivates = false, want true")
 		}
+		if catalog[0].Activation != "legacy_triggers(sentinel-trigger-xyz)" {
+			t.Fatalf("Catalog activation = %q, want legacy trigger summary", catalog[0].Activation)
+		}
 		if len(catalog[0].Triggers) != 1 || catalog[0].Triggers[0] != "sentinel-trigger-xyz" {
 			t.Fatalf("Catalog triggers = %+v, want sentinel trigger", catalog[0].Triggers)
 		}
@@ -769,8 +772,14 @@ func TestSkillRegistry_CatalogAutoActivatesOnlyWithActivationRules(t *testing.T)
 	if catalog[0].Name != "manual_skill" || catalog[0].AutoActivates {
 		t.Fatalf("manual catalog entry = %+v, want non-auto-activating", catalog[0])
 	}
+	if catalog[0].Activation != "none" {
+		t.Fatalf("manual catalog activation = %q, want none", catalog[0].Activation)
+	}
 	if catalog[1].Name != "auto_skill" || !catalog[1].AutoActivates {
 		t.Fatalf("auto catalog entry = %+v, want auto-activating", catalog[1])
+	}
+	if catalog[1].Activation != "any(auto trigger)" {
+		t.Fatalf("auto catalog activation = %q, want any(auto trigger)", catalog[1].Activation)
 	}
 	manual, ok := reg.Lookup("manual_skill")
 	if !ok || manual.HasActivationRules() {
@@ -797,6 +806,9 @@ func TestSkillAutoActivationRejectsEmptyAllAnyGroup(t *testing.T) {
 	catalog := reg.Catalog()
 	if len(catalog) != 1 || catalog[0].AutoActivates {
 		t.Fatalf("catalog entry = %+v, want non-auto-activating", catalog)
+	}
+	if catalog[0].Activation != "none" {
+		t.Fatalf("catalog activation = %q, want none", catalog[0].Activation)
 	}
 	if _, err := InstallRuntimeSkill(t.TempDir(), Skill{
 		Name: "empty_group",

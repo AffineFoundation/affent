@@ -42,6 +42,9 @@ func TestHandleAccountSkills_ListsAndReadsSkillBodies(t *testing.T) {
 	if !found.AutoActivates {
 		t.Fatalf("catalog entry should expose built-in skill as auto-activating: %+v", found)
 	}
+	if found.Activation == "" || found.Activation == "none" {
+		t.Fatalf("catalog entry should expose activation summary: %+v", found)
+	}
 
 	r = httptest.NewRequest(http.MethodGet, "/v1/skills/coding_repair_workflow", nil)
 	w = httptest.NewRecorder()
@@ -88,6 +91,9 @@ func TestHandleAccountSkills_InstalledSkillActivatesForActiveAndNewSessions(t *t
 	if !detail.Skill.AutoActivates {
 		t.Fatalf("install response should expose skill as auto-activating: %+v", detail.Skill)
 	}
+	if detail.Skill.Activation != "any(account demo)" {
+		t.Fatalf("install response activation = %q, want any(account demo)", detail.Skill.Activation)
+	}
 	if active.skillRegistry == nil {
 		t.Fatal("active session skill registry missing")
 	}
@@ -120,6 +126,9 @@ func TestHandleAccountSkills_InstalledSkillActivatesForActiveAndNewSessions(t *t
 	}
 	if !detail.Skill.AutoActivates {
 		t.Fatalf("account read response should preserve auto activation state: %+v", detail.Skill)
+	}
+	if detail.Skill.Activation != "any(account demo)" {
+		t.Fatalf("account read activation = %q, want any(account demo)", detail.Skill.Activation)
 	}
 
 	r = httptest.NewRequest(http.MethodDelete, "/v1/skills/account_demo", nil)
@@ -171,6 +180,9 @@ func TestHandleAccountSkills_ManualSkillDoesNotAutoActivate(t *testing.T) {
 	if detail.SessionID != "account" || detail.Skill.Name != "manual_demo" || !detail.Skill.Runtime || detail.Skill.AutoActivates {
 		t.Fatalf("manual install response = %+v, want runtime non-auto-activating skill", detail.Skill)
 	}
+	if detail.Skill.Activation != "none" {
+		t.Fatalf("manual install activation = %q, want none", detail.Skill.Activation)
+	}
 	if got := active.skillRegistry.Provide("please use manual demo"); got != "" {
 		t.Fatalf("manual skill should not auto-activate in active session, got %q", got)
 	}
@@ -189,6 +201,9 @@ func TestHandleAccountSkills_ManualSkillDoesNotAutoActivate(t *testing.T) {
 		if skill.Name == "manual_demo" {
 			if skill.AutoActivates {
 				t.Fatalf("manual list entry should not auto-activate: %+v", skill)
+			}
+			if skill.Activation != "none" {
+				t.Fatalf("manual list activation = %q, want none", skill.Activation)
 			}
 			return
 		}

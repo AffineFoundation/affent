@@ -51,6 +51,7 @@ type skillInfo struct {
 	Triggers       []string                   `json:"triggers,omitempty"`
 	AutoActivation *agent.SkillAutoActivation `json:"auto_activation,omitempty"`
 	AutoActivates  bool                       `json:"auto_activates"`
+	Activation     string                     `json:"activation"`
 	BodyPreview    string                     `json:"body_preview,omitempty"`
 	BodyBytes      int                        `json:"body_bytes"`
 	Body           string                     `json:"body,omitempty"`
@@ -316,6 +317,7 @@ func skillInfoFromSkill(skill agent.Skill, includeBody bool) skillInfo {
 		RequiredTools: append([]string(nil), skill.RequiredTools...),
 		Triggers:      append([]string(nil), skill.Triggers...),
 		AutoActivates: skill.HasActivationRules(),
+		Activation:    skill.ActivationSummary(),
 		BodyPreview:   textutil.Preview(body, 320),
 		BodyBytes:     len(body),
 	}

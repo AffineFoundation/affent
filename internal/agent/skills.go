@@ -113,6 +113,10 @@ func (s Skill) HasActivationRules() bool {
 	return false
 }
 
+func (s Skill) ActivationSummary() string {
+	return skillActivationSummary(s.AutoActivation, s.Triggers, s.Match != nil)
+}
+
 type SkillAutoActivation struct {
 	// Any activates the skill when any phrase is present.
 	Any []string `json:"any,omitempty"`
@@ -177,6 +181,45 @@ func hasNonEmptyString(values []string) bool {
 	return false
 }
 
+func skillActivationSummary(auto SkillAutoActivation, triggers []string, hasMatch bool) string {
+	parts := []string{}
+	if hasMatch {
+		parts = append(parts, "custom_match")
+	}
+	if any := compactNonEmptyStrings(auto.Any); len(any) > 0 {
+		parts = append(parts, "any("+strings.Join(any, ", ")+")")
+	}
+	allAnyOnly := SkillAutoActivation{AllAny: auto.AllAny}
+	if allAnyOnly.hasRules() {
+		groups := make([]string, 0, len(auto.AllAny))
+		for _, group := range auto.AllAny {
+			if values := compactNonEmptyStrings(group); len(values) > 0 {
+				groups = append(groups, strings.Join(values, "|"))
+			}
+		}
+		if len(groups) > 0 {
+			parts = append(parts, "all_any("+strings.Join(groups, " + ")+")")
+		}
+	}
+	if legacy := compactNonEmptyStrings(triggers); len(legacy) > 0 {
+		parts = append(parts, "legacy_triggers("+strings.Join(legacy, ", ")+")")
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, "; ")
+}
+
+func compactNonEmptyStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
 // SkillRegistry is an ordered set of skills. The router iterates in
 // registration order so multiple active skills compose deterministically
 // (matters for prompt-shape stability across reproducible eval runs).
@@ -193,6 +236,7 @@ type SkillCatalogEntry struct {
 	Triggers       []string             `json:"triggers,omitempty"`
 	AutoActivation *SkillAutoActivation `json:"auto_activation,omitempty"`
 	AutoActivates  bool                 `json:"auto_activates"`
+	Activation     string               `json:"activation"`
 }
 
 // Register appends a skill. Operators wiring a custom registry call
@@ -283,6 +327,7 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 			Source:        s.Source,
 			RequiredTools: append([]string(nil), s.RequiredTools...),
 			AutoActivates: s.HasActivationRules(),
+			Activation:    s.ActivationSummary(),
 		}
 		if len(s.Triggers) > 0 {
 			entry.Triggers = append([]string(nil), s.Triggers...)

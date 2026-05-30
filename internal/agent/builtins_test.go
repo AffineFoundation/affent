@@ -1947,7 +1947,9 @@ func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
 			t.Fatalf("skill list missing %q:\n%s", want, list)
 		}
 	}
-	if !strings.Contains(list, `"auto_activation"`) || !strings.Contains(list, `"auto_activates": true`) {
+	if !strings.Contains(list, `"auto_activation"`) ||
+		!strings.Contains(list, `"auto_activates": true`) ||
+		!strings.Contains(list, `"activation": "`) {
 		t.Fatalf("skill list should expose activation state and rules:\n%s", list)
 	}
 	body, err := tool.Execute(ctx, json.RawMessage(`{"action":"read","name":"coding_repair_workflow"}`))
@@ -1994,7 +1996,9 @@ func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 		t.Fatalf("skill list installed: %v", err)
 	}
 	if !strings.Contains(list, `"runtime demo"`) || !strings.Contains(list, `"auto_activation"`) ||
-		!strings.Contains(list, `"auto_activates": true`) || !strings.Contains(list, `"required_tools"`) {
+		!strings.Contains(list, `"auto_activates": true`) ||
+		!strings.Contains(list, `"activation": "any(runtime demo)"`) ||
+		!strings.Contains(list, `"required_tools"`) {
 		t.Fatalf("skill list should expose installed activation state and rules:\n%s", list)
 	}
 	if got := reg.Provide("please use runtime demo now"); !strings.Contains(got, body) {
@@ -2079,7 +2083,9 @@ func TestSkillToolInstallReportsInactiveWithoutActivationRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("skill list manual: %v", err)
 	}
-	if !strings.Contains(list, `"manual_demo"`) || !strings.Contains(list, `"auto_activates": false`) {
+	if !strings.Contains(list, `"manual_demo"`) ||
+		!strings.Contains(list, `"auto_activates": false`) ||
+		!strings.Contains(list, `"activation": "none"`) {
 		t.Fatalf("skill list should expose manual skill as non-auto-activating:\n%s", list)
 	}
 }

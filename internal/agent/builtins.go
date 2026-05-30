@@ -492,46 +492,7 @@ func skillProposalReviewMessage(proposal RuntimeSkillProposal) string {
 }
 
 func skillInstallSuccessMessage(installed Skill, runtimeTools *Registry) string {
-	return fmt.Sprintf("installed skill %q active_now=%t auto_activates=%t source=%s activation=%s required_tools=%s missing_required_tools=%s\n\n%s", installed.Name, skillActiveNow(installed, runtimeTools), installed.HasActivationRules(), installed.Source, skillActivationSummary(installed.AutoActivation, installed.Triggers, installed.Match != nil), skillRequiredToolsSummary(installed.RequiredTools), skillMissingRequiredToolsSummary(installed, runtimeTools), strings.TrimSpace(installed.Body))
-}
-
-func skillActivationSummary(auto SkillAutoActivation, triggers []string, hasMatch bool) string {
-	parts := []string{}
-	if hasMatch {
-		parts = append(parts, "custom_match")
-	}
-	if any := compactNonEmptyStrings(auto.Any); len(any) > 0 {
-		parts = append(parts, "any("+strings.Join(any, ", ")+")")
-	}
-	allAnyOnly := SkillAutoActivation{AllAny: auto.AllAny}
-	if allAnyOnly.hasRules() {
-		groups := make([]string, 0, len(auto.AllAny))
-		for _, group := range auto.AllAny {
-			if values := compactNonEmptyStrings(group); len(values) > 0 {
-				groups = append(groups, strings.Join(values, "|"))
-			}
-		}
-		if len(groups) > 0 {
-			parts = append(parts, "all_any("+strings.Join(groups, " + ")+")")
-		}
-	}
-	if legacy := compactNonEmptyStrings(triggers); len(legacy) > 0 {
-		parts = append(parts, "legacy_triggers("+strings.Join(legacy, ", ")+")")
-	}
-	if len(parts) == 0 {
-		return "none"
-	}
-	return strings.Join(parts, "; ")
-}
-
-func compactNonEmptyStrings(values []string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			out = append(out, value)
-		}
-	}
-	return out
+	return fmt.Sprintf("installed skill %q active_now=%t auto_activates=%t source=%s activation=%s required_tools=%s missing_required_tools=%s\n\n%s", installed.Name, skillActiveNow(installed, runtimeTools), installed.HasActivationRules(), installed.Source, installed.ActivationSummary(), skillRequiredToolsSummary(installed.RequiredTools), skillMissingRequiredToolsSummary(installed, runtimeTools), strings.TrimSpace(installed.Body))
 }
 
 func skillRequiredToolsSummary(requiredTools []string) string {
