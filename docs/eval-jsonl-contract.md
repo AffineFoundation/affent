@@ -112,6 +112,10 @@ Shared metadata fields:
   against a nominal long-run or web batch passing while accidentally omitting
   key workloads such as market analysis, Bittensor research, code/PR execution,
   web evidence, or long-run recovery.
+- `required_task_state_evidence_sources`: optional list of TaskState evidence
+  sources that must appear at least once in the batch summary. Use this when a
+  run must prove concrete completion facts such as `git_commit` or `git_push`
+  through the canonical task-state snapshot rather than final-message text.
 
 ## Scenario Record
 
@@ -809,6 +813,9 @@ Summary records aggregate all scenario records from the same process:
   independently from capability coverage, so CI can require at least one
   realistic market, Bittensor, code/PR, web-evidence, or long-run recovery
   workload before interpreting aggregate pass rates.
+  `--require-task-state-evidence-source` gates structural TaskState evidence
+  after the run, so code/PR or deployment batches can require sources such as
+  `git_commit` and `git_push` without matching natural-language output.
 - Quality gate outcome: `quality_profile` identifies any built-in profile used,
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and

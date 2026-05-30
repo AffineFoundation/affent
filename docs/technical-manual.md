@@ -1236,7 +1236,11 @@ actually included at least one scenario for a capability family such as
 profile-provided coverage requirements and catch filtered or misconfigured
 suites before pass-rate gates are interpreted. Explicit
 `--require-expectation-domain DOMAIN` flags work the same way for workload
-domains. JSONL summary records also
+domains. Use `--require-task-state-evidence-source SOURCE` when a batch must
+prove a concrete canonical TaskState evidence source such as `git_commit` or
+`git_push` appeared at least once; this is useful for code/PR long-run suites
+because the gate checks structured task-state evidence instead of final-answer
+phrasing. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr. JSONL summaries also include

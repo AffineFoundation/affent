@@ -253,7 +253,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
-	for _, want := range []string{"-list-coverage", "-require-expectation-capability", "-require-expectation-domain", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate", "-max-expectation-domain-avg-total-tokens", "-min-expectation-domain-source-access-verified-rate"} {
+	for _, want := range []string{"-list-coverage", "-require-expectation-capability", "-require-expectation-domain", "-require-task-state-evidence-source", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate", "-max-expectation-domain-avg-total-tokens", "-min-expectation-domain-source-access-verified-rate"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("--help missing expectation coverage gate %q:\n%s", want, help)
 		}
@@ -574,6 +574,7 @@ func TestTraceFileQualityGateConfigDisablesProfileScenarioCoverage(t *testing.T)
 		traceGates.MinExpectationDomainPassRate != nil ||
 		len(traceGates.RequiredExpectationCapabilities) != 0 ||
 		len(traceGates.RequiredExpectationDomains) != 0 ||
+		len(traceGates.RequiredTaskStateEvidenceSources) != 0 ||
 		len(traceGates.MinExpectationDomainSourceAccessVerifiedRates) != 0 ||
 		len(traceGates.MaxExpectationDomainToolErrorRates) != 0 {
 		t.Fatalf("trace-file gates should drop profile scenario-coverage gates: %+v", traceGates)
@@ -584,13 +585,18 @@ func TestTraceFileQualityGateConfigDisablesProfileScenarioCoverage(t *testing.T)
 	}
 
 	explicitGates := qualityGateConfig{
-		RequiredExpectationCapabilities: []string{"memory"},
+		RequiredExpectationCapabilities:  []string{"memory"},
+		RequiredTaskStateEvidenceSources: []string{"git_push"},
 	}
 	traceGates = qualityGateConfigForTraceFile(explicitGates, func(name string) bool {
-		return name == "require-expectation-capability"
+		return name == "require-expectation-capability" ||
+			name == "require-task-state-evidence-source"
 	})
 	if !reflect.DeepEqual(traceGates.RequiredExpectationCapabilities, []string{"memory"}) {
 		t.Fatalf("explicit trace-file expectation gate should be preserved: %+v", traceGates)
+	}
+	if !reflect.DeepEqual(traceGates.RequiredTaskStateEvidenceSources, []string{"git_push"}) {
+		t.Fatalf("explicit trace-file task-state evidence gate should be preserved: %+v", traceGates)
 	}
 }
 
@@ -1080,6 +1086,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ExpectationCapabilityPass:               map[string]int{"browser": 1, "memory": 1},
 		ExpectationDomains:                      map[string]int{"bittensor": 1, "market": 2},
 		ExpectationDomainPass:                   map[string]int{"market": 1},
+		TaskStateEvidenceBySource:               map[string]int{"git_commit": 1},
 		ExpectationDomainRuntime: map[string]*expectationDomainRuntimeTotals{
 			"bittensor": {
 				Scenarios:                  1,
@@ -1172,6 +1179,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxExpectationDomainLoopGuardInterventionRates: map[string]float64{"bittensor": 0.25},
 		RequiredExpectationCapabilities:                []string{"browser", "delegated_source_evidence"},
 		RequiredExpectationDomains:                     []string{"code_pr", "market"},
+		RequiredTaskStateEvidenceSources:               []string{"git_commit", "git_push"},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -1233,6 +1241,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"source_network_rate 0.250 < min 0.500",
 		"source_access_verified_rate 0.750 < min 0.900",
 		"subagent_error_rate 0.500 > max 0.250",
+		"task_state_evidence_source[git_push] unavailable, want >= 1 evidence",
 		"tool_context_truncation_rate 0.800 > max 0.500",
 		"tool_error_rate 0.200 > max 0.100",
 		"tool_repair_success_rate 0.750 < min 0.900",
@@ -5683,6 +5692,31 @@ func TestPrintBatchSummaryJSONLIncludesQualityGateResult(t *testing.T) {
 	}
 }
 
+func TestPrintBatchSummaryJSONLIncludesTaskStateEvidenceGateResult(t *testing.T) {
+	var out bytes.Buffer
+	meta := testEvalJSONLMetadata()
+	meta.RequiredTaskStateEvidenceSources = []string{"git_push"}
+
+	printBatchSummaryJSONL(&out, meta, batchSummary{
+		Total:                     1,
+		Passed:                    1,
+		EndCompleted:              1,
+		TaskStateEvidenceBySource: map[string]int{"git_commit": 1},
+	}, []string{"task_state_evidence_source[git_push] unavailable, want >= 1 evidence"})
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("jsonl summary did not decode: %v\n%s", err, out.String())
+	}
+	if got["quality_gates_passed"] != false {
+		t.Fatalf("quality_gates_passed = %#v\njson=%s", got["quality_gates_passed"], out.String())
+	}
+	sources, ok := got["required_task_state_evidence_sources"].([]any)
+	if !ok || len(sources) != 1 || sources[0] != "git_push" {
+		t.Fatalf("required_task_state_evidence_sources = %#v\njson=%s", got["required_task_state_evidence_sources"], out.String())
+	}
+}
+
 func TestCloneTraceSchemaVersions(t *testing.T) {
 	if got := cloneTraceSchemaVersions(nil); got != nil {
 		t.Fatalf("nil trace schema versions should produce nil map, got %#v", got)
@@ -5771,6 +5805,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxExpectationDomainLoopGuardRates := map[string]float64{"market": 0.1}
 	requiredExpectationCapabilities := []string{"delegated_source_evidence", "source_access"}
 	requiredExpectationDomains := []string{"bittensor", "market"}
+	requiredTaskStateEvidenceSources := []string{"git_commit", "git_push"}
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                                    &minPassRate,
 		MinMemoryUpdateRate:                            &minMemoryUpdateRate,
@@ -5828,6 +5863,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxExpectationDomainLoopGuardInterventionRates: maxExpectationDomainLoopGuardRates,
 		RequiredExpectationCapabilities:                requiredExpectationCapabilities,
 		RequiredExpectationDomains:                     requiredExpectationDomains,
+		RequiredTaskStateEvidenceSources:               requiredTaskStateEvidenceSources,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
@@ -5851,6 +5887,9 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	}
 	if !reflect.DeepEqual(meta.RequiredExpectationDomains, requiredExpectationDomains) {
 		t.Fatalf("required expectation domain metadata = %#v, want %#v", meta.RequiredExpectationDomains, requiredExpectationDomains)
+	}
+	if !reflect.DeepEqual(meta.RequiredTaskStateEvidenceSources, requiredTaskStateEvidenceSources) {
+		t.Fatalf("required task-state evidence source metadata = %#v, want %#v", meta.RequiredTaskStateEvidenceSources, requiredTaskStateEvidenceSources)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
 		t.Fatalf("disabled quality gate metadata should be omitted: %+v", meta)
