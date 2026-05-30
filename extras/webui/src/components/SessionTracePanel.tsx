@@ -32,10 +32,6 @@ export function SessionTracePanel({
     () => traceFilters(events, trace.toolIssueCount),
     [events, trace.toolIssueCount],
   );
-  const searchShortcuts = useMemo(
-    () => traceSearchShortcuts(events, trace),
-    [events, trace],
-  );
   const visibleIssues = useMemo(
     () => filterTraceIssues(trace.toolIssues, filter, trimmedQuery),
     [filter, trace.toolIssues, trimmedQuery],
@@ -89,12 +85,6 @@ export function SessionTracePanel({
       focusedIssue ? traceFailureEvidence(focusedIssue, events) : undefined,
     [events, focusedIssue],
   );
-  const applySearch = (nextQuery: string, nextFilter: TraceFilter = "all") => {
-    setFilter(nextFilter);
-    setQuery(nextQuery);
-    setSelectedRowKey(undefined);
-  };
-
   return (
     <section
       className="session-trace-panel"
@@ -144,59 +134,26 @@ export function SessionTracePanel({
                         setSelectedRowKey(undefined);
                       }}
                       placeholder="Search event, tool, path, command, status:failed, exit:1"
-                      aria-describedby={
-                        searchShortcuts.length > 0
-                          ? "session-trace-search-help"
-                          : undefined
-                      }
                     />
                   </label>
-                  <div
-                    className="session-trace-filter-group"
-                    role="group"
-                    aria-label="Trace filters"
-                  >
-                    {filters.map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        className="session-trace-filter"
-                        aria-pressed={filter === item.key}
-                        disabled={item.count === 0 && item.key !== "all"}
-                        onClick={() => {
-                          setFilter((current) =>
-                            current === item.key && item.key !== "all"
-                              ? "all"
-                              : item.key,
-                          );
-                          setSelectedRowKey(undefined);
-                        }}
-                      >
-                        {item.label}
-                        {item.count > 0 ? ` ${item.count}` : ""}
-                      </button>
-                    ))}
-                  </div>
-                  {searchShortcuts.length > 0 ? (
-                    <div
-                      className="session-trace-query-tools"
-                      id="session-trace-search-help"
-                      aria-label="Trace search shortcuts"
+                  <label className="session-trace-filter-select">
+                    <span>Show</span>
+                    <select
+                      aria-label="Trace category"
+                      value={filter}
+                      onChange={(event) => {
+                        setFilter(event.target.value as TraceFilter);
+                        setSelectedRowKey(undefined);
+                      }}
                     >
-                      <span>Quick scopes</span>
-                      {searchShortcuts.map((shortcut) => (
-                        <button
-                          key={shortcut.label}
-                          type="button"
-                          onClick={() =>
-                            applySearch(shortcut.query, shortcut.filter)
-                          }
-                        >
-                          {shortcut.label}
-                        </button>
+                      {filters.map((item) => (
+                        <option key={item.key} value={item.key}>
+                          {item.label}
+                          {item.count > 0 ? ` (${item.count})` : ""}
+                        </option>
                       ))}
-                    </div>
-                  ) : null}
+                    </select>
+                  </label>
                   {hasActiveNarrowing ? (
                     <button
                       type="button"
@@ -348,12 +305,6 @@ interface TraceFilterItem {
   key: TraceFilter;
   label: string;
   count: number;
-}
-
-interface TraceSearchShortcut {
-  label: string;
-  query: string;
-  filter: TraceFilter;
 }
 
 interface TraceSelectionSummary {
@@ -616,20 +567,69 @@ function traceEventRows(
   const rows: TraceEventRowView[] = [];
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    const next = events[index + 1];
-    if (
-      event.type === EventType.ToolRequest &&
-      next?.type === EventType.ToolResult &&
-      readEventString(event, "call_id") &&
-      readEventString(event, "call_id") === readEventString(next, "call_id")
-    ) {
-      rows.push(traceEventRowFromEvents([event, next], callTools, requestLabels));
-      index += 1;
+    const group = adjacentTraceEventGroup(events, index);
+    if (group.length > 1) {
+      rows.push(traceEventRowFromEvents(group, callTools, requestLabels));
+      index += group.length - 1;
       continue;
     }
     rows.push(traceEventRowFromEvents([event], callTools, requestLabels));
   }
   return rows;
+}
+
+function adjacentTraceEventGroup(
+  events: readonly NormalizedEvent[],
+  startIndex: number,
+): NormalizedEvent[] {
+  const first = events[startIndex];
+  const callId = traceToolCallId(first);
+  if (callId) {
+    const group = [first];
+    for (let index = startIndex + 1; index < events.length; index += 1) {
+      const next = events[index];
+      if (traceToolCallId(next) !== callId) break;
+      group.push(next);
+    }
+    return group;
+  }
+
+  const streamKind = traceStreamGroupKind(first);
+  if (streamKind) {
+    const group = [first];
+    for (let index = startIndex + 1; index < events.length; index += 1) {
+      const next = events[index];
+      if (traceStreamGroupKind(next) !== streamKind || next.turnId !== first.turnId)
+        break;
+      group.push(next);
+    }
+    return group;
+  }
+
+  if (!first.known) {
+    const group = [first];
+    for (let index = startIndex + 1; index < events.length; index += 1) {
+      const next = events[index];
+      if (next.known || next.type !== first.type || next.turnId !== first.turnId)
+        break;
+      group.push(next);
+    }
+    return group;
+  }
+
+  return [first];
+}
+
+function traceToolCallId(event: NormalizedEvent): string | undefined {
+  if (event.type !== EventType.ToolRequest && event.type !== EventType.ToolResult)
+    return undefined;
+  return readEventString(event, "call_id");
+}
+
+function traceStreamGroupKind(event: NormalizedEvent): string | undefined {
+  if (event.type === EventType.MessageDelta) return EventType.MessageDelta;
+  if (event.type === EventType.ThinkingDelta) return EventType.ThinkingDelta;
+  return undefined;
 }
 
 function traceEventRowFromEvents(
@@ -643,28 +643,21 @@ function traceEventRowFromEvents(
   const tool = toolName(primaryEvent, callTools) ?? (requestEvent ? toolName(requestEvent, callTools) : undefined);
   const requestNumber = primaryEvent.turnId ? requestLabels.get(primaryEvent.turnId) : undefined;
   const request = requestNumber ? `Request ${requestNumber}` : "Session";
-  const callId = readEventString(primaryEvent, "call_id") ?? (requestEvent ? readEventString(requestEvent, "call_id") : undefined);
   const exitCode = resultEvent ? readEventNumber(resultEvent, "exit_code") : readEventNumber(primaryEvent, "exit_code");
-  const durationMs = resultEvent ? readEventNumber(resultEvent, "duration_ms") : readEventNumber(primaryEvent, "duration_ms");
   const source = events.some((event) => eventHasSourceEvidence(event, callTools));
   const failed = events.some((event) => eventIsFailedToolResult(event) || event.type === EventType.Error);
   const repaired = events.some(eventHasRepair);
   const truncated = events.some(eventHasTruncation);
   const artifact = events.some(eventHasArtifact);
   const meta = compactTraceParts([
-    tool ? `tool ${tool}` : undefined,
-    callId ? `call ${callId}` : undefined,
-    exitCode != null ? `exit ${exitCode}` : undefined,
-    durationMs != null ? formatTraceDuration(durationMs) : undefined,
+    exitCode != null && exitCode !== 0 ? `exit ${exitCode}` : undefined,
     artifact ? "artifact" : undefined,
     repaired ? "repaired" : undefined,
     truncated ? "truncated" : undefined,
     events.length > 1 ? `${events.length} events` : undefined,
     events.some((event) => !event.known) ? "unclassified" : undefined,
   ]);
-  const label = requestEvent && resultEvent
-    ? traceToolCallLabel(resultEvent, failed, source)
-    : traceEventLabel(primaryEvent, failed, source);
+  const label = traceGroupedEventLabel(events, primaryEvent, failed, source, requestEvent, resultEvent);
 
   return {
     key: traceRowKey(events),
@@ -719,9 +712,33 @@ function traceToolCallLabel(
   return "Action finished";
 }
 
+function traceGroupedEventLabel(
+  events: readonly NormalizedEvent[],
+  primaryEvent: NormalizedEvent,
+  failed: boolean,
+  source: boolean,
+  requestEvent?: NormalizedEvent,
+  resultEvent?: NormalizedEvent,
+): string {
+  if (requestEvent && resultEvent)
+    return traceToolCallLabel(resultEvent, failed, source);
+  if (events.length > 1 && events.every((event) => event.type === EventType.MessageDelta))
+    return "Assistant stream";
+  if (events.length > 1 && events.every((event) => event.type === EventType.ThinkingDelta))
+    return "Thinking stream";
+  if (events.length > 1 && events.every((event) => !event.known))
+    return `${primaryEvent.type} group`;
+  return traceEventLabel(primaryEvent, failed, source);
+}
+
 function traceRowSummary(events: readonly NormalizedEvent[], tool: string | undefined): string {
   const request = events.find((event) => event.type === EventType.ToolRequest);
   const result = events.find((event) => event.type === EventType.ToolResult);
+  if (!request && !result && events.length > 1) {
+    const stream = traceGroupedStreamText(events);
+    if (stream) return stream;
+    return `${events.length} adjacent ${traceEventLabel(events[0], false, false).toLowerCase()} events`;
+  }
   if (result) {
     const resultSummary = traceEventSummary(result, tool);
     if (request && eventIsFailedToolResult(result)) {
@@ -762,7 +779,9 @@ function traceEventLabel(
     return "Action finished";
   }
   if (event.type === EventType.MessageDone) return "Assistant answer";
+  if (event.type === EventType.MessageDelta) return "Assistant stream";
   if (event.type === EventType.MessageRejected) return "Answer deferred";
+  if (event.type === EventType.ThinkingDelta) return "Thinking stream";
   if (event.type === EventType.ThinkingDone) return "Thinking saved";
   if (event.type === EventType.Usage) return "Token usage";
   if (event.type === EventType.TurnEnd) return "Request ended";
@@ -814,6 +833,8 @@ function traceEventSummary(event: NormalizedEvent, tool: string | undefined): st
       readEventString(event, "display_text") ?? readEventString(event, "text"),
       180,
     ) ?? "User request recorded.";
+  if (event.type === EventType.MessageDelta || event.type === EventType.ThinkingDelta)
+    return compactTraceText(readEventString(event, "delta"), 180) ?? "Streaming output.";
   if (event.type === EventType.MessageDone || event.type === EventType.ThinkingDone)
     return compactTraceText(readEventString(event, "text"), 180) ?? "Saved output.";
   if (event.type === EventType.Usage) {
@@ -858,7 +879,32 @@ function traceToolStatsSummary(event: NormalizedEvent): string | undefined {
 
 function traceGroupedTypeLabel(row: TraceEventRowView): string {
   if (row.requestEvent && row.resultEvent) return "tool call";
+  if (row.events.length > 1 && row.events.every((event) => event.type === EventType.MessageDelta))
+    return "assistant stream";
+  if (row.events.length > 1 && row.events.every((event) => event.type === EventType.ThinkingDelta))
+    return "thinking stream";
+  if (row.events.length > 1) return `${row.primaryEvent.type} group`;
   return row.primaryEvent.type;
+}
+
+function traceGroupedStreamText(events: readonly NormalizedEvent[]): string | undefined {
+  if (
+    !events.every(
+      (event) =>
+        event.type === EventType.MessageDelta ||
+        event.type === EventType.ThinkingDelta,
+    )
+  )
+    return undefined;
+  const text = events
+    .map((event) => readEventString(event, "delta"))
+    .filter((value): value is string => !!value)
+    .join("");
+  const preview = compactTraceText(text, 220);
+  return compactTraceParts([
+    `${events.length} stream chunks`,
+    preview,
+  ]).join(" · ");
 }
 
 function traceDisplayTotal(events: readonly NormalizedEvent[]): number {
@@ -1342,104 +1388,6 @@ function traceIssueSearchTerms(query: string): string[] {
   return (query.toLowerCase().match(/"[^"]+"|\S+/g) ?? [])
     .map((term) => term.replace(/^"|"$/g, "").trim())
     .filter(Boolean);
-}
-
-function traceDynamicSearches(
-  issues: SessionTraceView["toolIssues"],
-): TraceSearchShortcut[] {
-  const text = issues.map(traceIssueSearchText).join("\n");
-  const shortcuts: TraceSearchShortcut[] = [];
-  if (/permission denied|publickey/.test(text)) {
-    shortcuts.push({
-      label: "permission denied",
-      query: "permission denied",
-      filter: "commands",
-    });
-  }
-  if (/load key|invalid format|bad permissions/.test(text)) {
-    shortcuts.push({
-      label: "invalid key",
-      query: "invalid format",
-      filter: "commands",
-    });
-  }
-  if (/git@github\.com|github\.com/.test(text)) {
-    shortcuts.push({
-      label: "github",
-      query: "github.com",
-      filter: "commands",
-    });
-  }
-  return shortcuts;
-}
-
-function traceSearchShortcuts(
-  events: readonly NormalizedEvent[],
-  trace: SessionTraceView,
-): TraceSearchShortcut[] {
-  const shortcuts: TraceSearchShortcut[] = [];
-  const exitCodes = [
-    ...new Set(
-      trace.toolIssues
-        .map((issue) => issue.exitCode)
-        .filter(
-          (exitCode): exitCode is number =>
-            typeof exitCode === "number" && exitCode !== 0,
-        ),
-    ),
-  ].sort((a, b) => a - b);
-
-  if (trace.toolIssueCount > 0) {
-    shortcuts.push({
-      label: "failed tools",
-      query: "status:failed",
-      filter: "issues",
-    });
-    for (const exitCode of exitCodes.slice(0, 3)) {
-      shortcuts.push({
-        label: `exit:${exitCode}`,
-        query: `exit:${exitCode}`,
-        filter: "issues",
-      });
-    }
-  }
-
-  if (countFilter(events, "commands") > 0)
-    shortcuts.push({ label: "shell", query: "tool:shell", filter: "commands" });
-  if (countFilter(events, "repairs") > 0)
-    shortcuts.push({
-      label: "repaired args",
-      query: "repaired",
-      filter: "repairs",
-    });
-  if (countFilter(events, "truncated") > 0)
-    shortcuts.push({
-      label: "truncated output",
-      query: "truncated",
-      filter: "truncated",
-    });
-  if (countFilter(events, "artifacts") > 0)
-    shortcuts.push({
-      label: "stored output",
-      query: "artifact:",
-      filter: "artifacts",
-    });
-  if (countFilter(events, "files") > 0)
-    shortcuts.push({ label: "file actions", query: "path:", filter: "files" });
-  if (trace.unknownCount > 0)
-    shortcuts.push({
-      label: "unclassified",
-      query: "unclassified",
-      filter: "unclassified",
-    });
-
-  const seen = new Set(shortcuts.map((shortcut) => shortcut.label));
-  for (const shortcut of traceDynamicSearches(trace.toolIssues)) {
-    if (seen.has(shortcut.label)) continue;
-    shortcuts.push(shortcut);
-    seen.add(shortcut.label);
-  }
-  return shortcuts;
 }
 
 function readableURLHost(value: string): string {

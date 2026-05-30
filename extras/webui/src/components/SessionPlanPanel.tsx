@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { SessionPlanSummary } from "../api/sessions";
 
 export function SessionPlanPanel({
@@ -21,9 +22,10 @@ export function SessionPlanPanel({
   onRunRemaining?: () => Promise<void> | void;
   onStopRunRemaining?: () => void;
 }) {
-  if (!summary && !loading && !error) return null;
   const steps = normalizedSteps(plan);
-  const open = summary?.active || summary?.blocked || steps.length > 0;
+  const planIdentity = planPanelIdentity(summary, steps);
+  const previousPlanIdentityRef = useRef(planIdentity);
+  const [open, setOpen] = useState(() => loading || !!error);
   const title = summary
     ? `${summary.completed_steps}/${summary.total_steps} complete`
     : loading
@@ -32,8 +34,21 @@ export function SessionPlanPanel({
   const detail = planDetail(summary, steps.length);
   const canExecute = !!summary && summary.active && !summary.done && !summary.blocked && !loading && !error;
 
+  useEffect(() => {
+    if (loading || error) {
+      setOpen(true);
+      return;
+    }
+    if (previousPlanIdentityRef.current !== planIdentity) {
+      previousPlanIdentityRef.current = planIdentity;
+      setOpen(false);
+    }
+  }, [error, loading, planIdentity]);
+
+  if (!summary && !loading && !error) return null;
+
   return (
-    <details className="session-plan-panel" data-testid="session-plan-panel" open={open}>
+    <details className="session-plan-panel" data-testid="session-plan-panel" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="session-plan-summary">
         <span className="session-plan-kicker">Plan</span>
         <strong>{title}</strong>
@@ -146,6 +161,24 @@ function planDetail(summary: SessionPlanSummary | undefined, stepCount: number):
   if (summary.blocked_step_index) return `Step ${summary.blocked_step_index} blocked`;
   if (summary.current_step_index) return `Step ${summary.current_step_index} ${statusLabel(summary.current_step_status ?? "pending").toLowerCase()}`;
   return `${summary.total_steps} ${summary.total_steps === 1 ? "step" : "steps"}`;
+}
+
+function planPanelIdentity(summary: SessionPlanSummary | undefined, steps: NormalizedPlanStep[]): string {
+  const summaryKey = summary
+    ? [
+        summary.label,
+        summary.total_steps,
+        summary.completed_steps,
+        summary.current_step_index,
+        summary.current_step_status,
+        summary.active,
+        summary.blocked,
+        summary.done,
+        summary.error,
+      ].join(":")
+    : "no-summary";
+  const stepKey = steps.map((step) => `${step.status}:${step.text}`).join("|");
+  return `${summaryKey}::${stepKey}`;
 }
 
 function compact(value: string): string {

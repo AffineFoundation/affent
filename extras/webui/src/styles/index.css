@@ -894,7 +894,8 @@ body[data-resizing="true"] {
 }
 
 .workbench-tab-surface > .session-plan-panel {
-  overflow: visible;
+  max-height: min(100%, 58vh);
+  overflow: hidden;
 }
 
 .workbench-tab-surface > .session-skills-panel[open] {
@@ -7069,7 +7070,10 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-plan-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  max-height: min(58vh, 560px);
   margin: 0 0 7px;
   overflow: hidden;
   border: 1px solid rgba(217, 224, 232, 0.72);
@@ -7080,6 +7084,7 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-plan-summary {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
@@ -7133,9 +7138,15 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-plan-body {
+  flex: 1 1 auto;
   display: grid;
   gap: 8px;
+  min-height: 0;
+  max-height: min(520px, calc(58vh - 40px));
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0 9px 9px;
+  scrollbar-width: thin;
 }
 
 .session-plan-actions {
@@ -18489,24 +18500,58 @@ pre.code {
 }
 
 .session-trace-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   gap: 6px;
   align-items: center;
   min-width: 0;
+  overflow: visible;
   flex: 0 0 auto;
   border: 1px solid rgba(217, 224, 232, 0.78);
   border-radius: var(--radius-sm);
   background: rgba(248, 250, 252, 0.7);
   padding: 6px;
+  scrollbar-width: thin;
 }
 
 .session-trace-toolbar .session-skills-search {
-  flex: 999 1 250px;
+  min-width: 0;
+}
+
+.session-trace-filter-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid rgba(217, 224, 232, 0.82);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.76);
+  padding: 0 7px;
+}
+
+.session-trace-filter-select span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-trace-filter-select select {
+  max-width: min(220px, 22vw);
+  min-width: 126px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  outline: none;
 }
 
 .session-trace-toolbar .ghost-action {
-  flex: 0 0 auto;
+  justify-self: end;
   min-height: 28px;
   border-radius: var(--radius-sm);
   white-space: nowrap;
@@ -18517,12 +18562,15 @@ pre.code {
 }
 
 .session-trace-toolbar .session-trace-filter-group {
-  flex: 1 1 auto;
+  grid-column: 1 / -1;
+  flex-wrap: nowrap;
   align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .session-trace-toolbar .session-trace-query-tools {
-  flex: 1 1 auto;
+  grid-column: 1 / -1;
 }
 
 .session-trace-debugger {
@@ -18558,13 +18606,14 @@ pre.code {
 .session-trace-query-tools {
   display: flex;
   flex: 0 0 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
   min-height: 24px;
   max-height: none;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
 }
 
@@ -19293,11 +19342,11 @@ pre.code {
 
 .session-trace-workspace {
   display: grid;
-  grid-template-columns: minmax(340px, 0.95fr) minmax(360px, 1.05fr);
+  grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.1fr);
   gap: 10px;
-  flex: 1 1 340px;
+  flex: 1 1 0;
   min-width: 0;
-  min-height: 360px;
+  min-height: 0;
 }
 
 .session-trace-list-pane,
@@ -19356,9 +19405,9 @@ pre.code {
 .session-trace-event-row {
   display: grid;
   box-sizing: border-box;
-  grid-template-columns: 42px minmax(88px, 0.46fr) minmax(0, 1fr);
-  gap: 6px 9px;
-  align-items: start;
+  grid-template-columns: 44px minmax(108px, 0.36fr) minmax(0, 1fr) minmax(76px, auto);
+  gap: 4px 8px;
+  align-items: center;
   width: 100%;
   min-width: 0;
   border: 1px solid transparent;
@@ -19368,7 +19417,7 @@ pre.code {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  padding: 7px 8px 7px 6px;
+  padding: 5px 7px 5px 5px;
   text-align: left;
 }
 
@@ -19445,15 +19494,17 @@ pre.code {
 }
 
 .session-trace-event-meta {
-  grid-column: 2 / -1;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  justify-content: flex-end;
   min-width: 0;
+  overflow: hidden;
 }
 
 .session-trace-event-meta b {
-  max-width: 180px;
+  flex: 0 0 auto;
+  max-width: 118px;
   border: 1px solid rgba(217, 224, 232, 0.74);
   border-radius: 999px;
   background: rgba(248, 250, 252, 0.74);
@@ -19601,27 +19652,27 @@ pre.code {
   overflow: auto;
 }
 
-.workbench-tab-surface > .session-trace-panel[open] > .session-trace-body {
+.workbench-tab-surface > .session-trace-panel[data-open="true"] > .session-trace-body {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 330px);
+  flex: 1 1 0;
+  height: auto;
   max-height: none;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
-  padding-right: 2px;
   scrollbar-width: thin;
 }
 
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-controls,
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-query-tools,
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-resultbar,
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-selection,
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-issues,
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-latest {
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-controls,
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-query-tools,
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-resultbar,
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-selection,
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-issues,
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-latest {
   flex: 0 0 auto;
 }
 
-.workbench-tab-surface > .session-trace-panel[open] .session-trace-results {
+.workbench-tab-surface > .session-trace-panel[data-open="true"] .session-trace-results {
   flex: 1 1 220px;
   max-height: none;
   min-height: 180px;
@@ -19751,12 +19802,16 @@ pre.code {
 .workbench-tab-surface > .session-trace-panel {
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 .workbench-tab-surface > .session-trace-panel > .session-trace-body {
-  height: auto;
+  height: 100%;
   max-height: none;
+  overflow: hidden;
 }
 
 .session-trace-clear {
@@ -21723,6 +21778,7 @@ html[data-theme="dark"] .session-trace-request-head:focus-visible {
   background: rgba(51, 65, 85, 0.42);
 }
 
+html[data-theme="dark"] .session-trace-filter-select,
 html[data-theme="dark"] .session-trace-query-tools button,
 html[data-theme="dark"] .session-trace-panel,
 html[data-theme="dark"] .session-trace-header,
@@ -21772,6 +21828,10 @@ html[data-theme="dark"] .session-trace-panel {
 html[data-theme="dark"] .session-trace-header {
   border-bottom-color: rgba(58, 68, 81, 0.82);
   background: rgba(14, 17, 22, 0.86);
+}
+
+html[data-theme="dark"] .session-trace-filter-select select {
+  color: var(--text);
 }
 
 html[data-theme="dark"] .session-trace-list-head,

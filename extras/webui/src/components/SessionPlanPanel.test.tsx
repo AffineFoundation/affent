@@ -25,6 +25,10 @@ describe("SessionPlanPanel", () => {
       />,
     );
 
+    const panel = screen.getByTestId("session-plan-panel");
+    expect(panel).not.toHaveAttribute("open");
+    fireEvent.click(panel.querySelector("summary")!);
+
     fireEvent.click(screen.getByRole("button", { name: "Run current step" }));
     fireEvent.click(screen.getByRole("button", { name: "Run remaining steps" }));
 
@@ -53,9 +57,20 @@ describe("SessionPlanPanel", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("session-plan-panel").querySelector("summary")!);
     fireEvent.click(screen.getByRole("button", { name: "Stop after this step" }));
 
     expect(onStopRunRemaining).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "Run remaining steps" })).toBeNull();
+  });
+
+  it("opens automatically for loading and error states", () => {
+    const { rerender } = render(<SessionPlanPanel loading />);
+
+    expect(screen.getByTestId("session-plan-panel")).toHaveAttribute("open");
+
+    rerender(<SessionPlanPanel error="Plan could not be read" />);
+
+    expect(screen.getByTestId("session-plan-panel")).toHaveAttribute("open");
   });
 });

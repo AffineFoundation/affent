@@ -61,7 +61,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("1 failed tool call");
     expect(screen.getByLabelText("Trace status")).toHaveTextContent("Failures1");
     expect(screen.getByLabelText("Search events")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Failures 1" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Trace category")).toBeInTheDocument();
 
     const list = screen.getByTestId("session-trace-event-list");
     expect(list).toHaveTextContent("User message");
@@ -89,7 +89,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-event-list")).not.toHaveTextContent("Action started");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
-    await user.click(screen.getByRole("button", { name: "Sources 2" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "sources");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Sources");
     expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("Source action");
     expect(screen.getByTestId("session-trace-event-list")).not.toHaveTextContent("npm test");
@@ -157,10 +157,33 @@ describe("SessionTracePanel", () => {
     expect(within(screen.getByTestId("session-trace-event-list")).getAllByRole("option")).toHaveLength(3);
     expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("#3-#4");
 
-    await user.click(screen.getByRole("button", { name: "Sources 2" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "sources");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Sources");
     expect(screen.getByTestId("session-trace-event-detail")).toHaveTextContent("Source");
     expect(screen.getByTestId("session-trace-event-detail")).toHaveTextContent("http 200");
+  });
+
+  it("compacts adjacent streaming chunks into readable trace records", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "message.delta", data: { turn_id: "t1", delta: "Working " } },
+      { id: 3, type: "message.delta", data: { turn_id: "t1", delta: "through " } },
+      { id: 4, type: "message.delta", data: { turn_id: "t1", delta: "trace." } },
+      { id: 5, type: "thinking.delta", data: { turn_id: "t1", delta: "Check " } },
+      { id: 6, type: "thinking.delta", data: { turn_id: "t1", delta: "layout." } },
+      { id: 7, type: "message.done", data: { turn_id: "t1", text: "Done." } },
+    ]);
+
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
+
+    const list = screen.getByTestId("session-trace-event-list");
+    expect(within(list).getAllByRole("option")).toHaveLength(4);
+    expect(list).toHaveTextContent("Assistant stream");
+    expect(list).toHaveTextContent("#2-#4");
+    expect(list).toHaveTextContent("3 stream chunks");
+    expect(list).toHaveTextContent("Working through trace.");
+    expect(list).toHaveTextContent("Thinking stream");
+    expect(list).toHaveTextContent("#5-#6");
   });
 
   it("keeps the full event list while selecting different failed tool results", async () => {
@@ -204,13 +227,13 @@ describe("SessionTracePanel", () => {
 
     render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
 
-    await user.click(screen.getByRole("button", { name: "Repairs 1" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "repairs");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Repairs");
     expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("repaired");
     expect(screen.getByTestId("session-trace-event-list")).not.toHaveTextContent("line 1");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
-    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "truncated output" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "truncated");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Truncated");
     expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("truncated");
     expect(screen.getByTestId("session-trace-event-list")).not.toHaveTextContent("Request started");
@@ -254,7 +277,8 @@ describe("SessionTracePanel", () => {
     render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
 
     expect(screen.getByLabelText("Trace status")).toHaveTextContent("Failures2");
-    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "exit:128" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "issues");
+    await user.type(screen.getByLabelText("Search events"), "exit:128");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: exit:128");
     expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("shell");
     expect(screen.getByTestId("session-trace-event-list")).not.toHaveTextContent("read_file");
@@ -266,7 +290,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-event-detail")).toHaveTextContent("list files before retrying");
   });
 
-  it("adds issue-derived shortcuts for Git and SSH failures", async () => {
+  it("keeps Git and SSH failures searchable without crowding the toolbar", async () => {
     const user = userEvent.setup();
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -287,18 +311,18 @@ describe("SessionTracePanel", () => {
 
     render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
 
-    const shortcuts = screen.getByLabelText("Trace search shortcuts");
-    expect(shortcuts).toHaveTextContent("permission denied");
-    expect(shortcuts).toHaveTextContent("invalid key");
-    expect(shortcuts).toHaveTextContent("github");
+    expect(screen.queryByLabelText("Trace search shortcuts")).toBeNull();
+    expect(screen.getByLabelText("Trace category")).toHaveTextContent("Commands");
 
-    await user.click(within(shortcuts).getByRole("button", { name: "permission denied" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "commands");
+    await user.type(screen.getByLabelText("Search events"), "permission denied");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Commands");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: permission denied");
     expect(screen.getByTestId("session-trace-event-detail")).toHaveTextContent("Permission denied");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
-    await user.click(within(shortcuts).getByRole("button", { name: "invalid key" }));
+    await user.selectOptions(screen.getByLabelText("Trace category"), "commands");
+    await user.type(screen.getByLabelText("Search events"), "invalid format");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: invalid format");
     expect(screen.getByTestId("session-trace-event-detail")).toHaveTextContent("invalid format");
   });
