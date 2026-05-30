@@ -489,6 +489,14 @@ func addRuntimeStatsSnapshot(dst *RuntimeStatsSnapshot, src RuntimeStatsSnapshot
 			dst.RuntimeErrorByKind[kind] += count
 		}
 	}
+	if len(src.RuntimeSurfaceRefreshByReason) > 0 {
+		if dst.RuntimeSurfaceRefreshByReason == nil {
+			dst.RuntimeSurfaceRefreshByReason = make(map[string]int64, len(src.RuntimeSurfaceRefreshByReason))
+		}
+		for reason, count := range src.RuntimeSurfaceRefreshByReason {
+			dst.RuntimeSurfaceRefreshByReason[reason] += count
+		}
+	}
 }
 
 func statsBoundarySnapshot(cfg Config) statsBoundaries {

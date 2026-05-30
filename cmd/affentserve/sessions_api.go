@@ -1430,6 +1430,9 @@ func runtimeStatsSnapshotEvidence(s *RuntimeStatsSnapshot) int64 {
 	for _, count := range s.RuntimeErrorByKind {
 		total += positiveInt64(count)
 	}
+	for _, count := range s.RuntimeSurfaceRefreshByReason {
+		total += positiveInt64(count)
+	}
 	if s.ContextCompactionLatestReason != "" {
 		total++
 	}
@@ -1440,6 +1443,9 @@ func runtimeStatsSnapshotEvidence(s *RuntimeStatsSnapshot) int64 {
 		total++
 	}
 	if s.ContextCompactionLatestCompactWindowPrefillSource != "" {
+		total++
+	}
+	if s.RuntimeSurfaceLatestRefreshReason != "" {
 		total++
 	}
 	return total
@@ -2028,6 +2034,9 @@ func scanRuntimeStatsFromEvents(r *bufio.Reader) (*RuntimeStatsSnapshot, error) 
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
 				continue
 			}
+			if addRuntimeSurfaceRefreshReason(&summary, p.RefreshReason) {
+				seen = true
+			}
 			if addRuntimeSurfaceCompactWindow(&summary, p) {
 				seen = true
 			}
@@ -2058,6 +2067,19 @@ func addRuntimeErrorKind(summary *RuntimeStatsSnapshot, kind string) {
 		summary.RuntimeErrorByKind = map[string]int64{}
 	}
 	summary.RuntimeErrorByKind[kind]++
+}
+
+func addRuntimeSurfaceRefreshReason(summary *RuntimeStatsSnapshot, reason string) bool {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return false
+	}
+	if summary.RuntimeSurfaceRefreshByReason == nil {
+		summary.RuntimeSurfaceRefreshByReason = map[string]int64{}
+	}
+	summary.RuntimeSurfaceRefreshByReason[reason]++
+	summary.RuntimeSurfaceLatestRefreshReason = reason
+	return true
 }
 
 func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCompactPayload, summaryPresentKnown bool) {

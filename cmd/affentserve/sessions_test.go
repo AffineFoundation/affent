@@ -173,6 +173,8 @@ func TestSessionPool_RestoresObservedAutoCompactWindowFromRuntimeSurface(t *test
 	}
 	runtime := s.RuntimeStatsSnapshot()
 	if runtime.ContextCompactions != 1 ||
+		runtime.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] != 1 ||
+		runtime.RuntimeSurfaceLatestRefreshReason != sse.RuntimeSurfaceRefreshCompactWindowObserved ||
 		runtime.ContextCompactionLatestCompactWindowPrefill != 72_000 ||
 		runtime.ContextCompactionLatestCompactWindowPrefillSource != sse.CompactWindowPrefillSourceServerObserved {
 		t.Fatalf("runtime stats = %+v, want compaction count with observed compact window", runtime)

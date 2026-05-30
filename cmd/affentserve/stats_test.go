@@ -602,6 +602,21 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 			CompactWindowPrefillSource:      "estimated",
 			CompactScopedInputTokens:        0,
 			CompactHardInputLimitTokens:     70000,
+		}) +
+		sessionEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
+			TurnID:                          "t1",
+			RefreshReason:                   sse.RuntimeSurfaceRefreshCompactWindowObserved,
+			ModelContextWindowTokens:        100000,
+			ModelContextWindowSource:        "provider",
+			ReservedOutputTokens:            30000,
+			CompactTriggerInputTokens:       70000,
+			CompactTriggerInputPercent:      80,
+			CompactScopeActive:              true,
+			CompactWindowOrdinal:            2,
+			CompactWindowPrefillInputTokens: 72000,
+			CompactWindowPrefillSource:      sse.CompactWindowPrefillSourceServerObserved,
+			CompactScopedInputTokens:        0,
+			CompactHardInputLimitTokens:     70000,
 		})
 	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -627,6 +642,8 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 	if runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 1 ||
 		runtime.RuntimeErrors != 1 ||
 		runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
+		runtime.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] != 1 ||
+		runtime.RuntimeSurfaceLatestRefreshReason != sse.RuntimeSurfaceRefreshCompactWindowObserved ||
 		runtime.ContextCompactions != 1 ||
 		runtime.ContextCompactionsReactive != 1 ||
 		runtime.ContextCompactionRemovedMessages != 40 ||
@@ -639,8 +656,8 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 		runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
 		!runtime.ContextCompactionLatestCompactScopeActive ||
 		runtime.ContextCompactionLatestCompactWindowOrdinal != 2 ||
-		runtime.ContextCompactionLatestCompactWindowPrefill != 68000 ||
-		runtime.ContextCompactionLatestCompactWindowPrefillSource != "estimated" ||
+		runtime.ContextCompactionLatestCompactWindowPrefill != 72000 ||
+		runtime.ContextCompactionLatestCompactWindowPrefillSource != sse.CompactWindowPrefillSourceServerObserved ||
 		runtime.ContextCompactionLatestCompactScopedInputTokens != 0 ||
 		runtime.ContextCompactionLatestCompactHardInputLimit != 70000 ||
 		runtime.ContextCompactionLatestState != "missing" {
@@ -657,6 +674,7 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 	}
 	if resp.Aggregate.InputTokens != 100 ||
 		resp.Aggregate.Tools.ToolFailureByKind["no_matches"] != 1 ||
+		resp.Aggregate.Runtime.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] != 1 ||
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 {
 		t.Fatalf("seeded aggregate stats = %+v, want durable event totals", resp.Aggregate)
 	}
@@ -1030,6 +1048,16 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		}
 		events = append(events, ev)
 	}
+	for _, p := range []sse.RuntimeSurfacePayload{
+		{TurnID: "t4", RefreshReason: "post_compaction", ModelContextWindowTokens: 100000, ModelContextWindowSource: "registry", ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 3, CompactWindowPrefillInputTokens: 72000, CompactWindowPrefillSource: sse.CompactWindowPrefillSourceServerObserved, CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+		{TurnID: "t4", RefreshReason: sse.RuntimeSurfaceRefreshCompactWindowObserved, ModelContextWindowTokens: 100000, ModelContextWindowSource: "registry", ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 3, CompactWindowPrefillInputTokens: 72000, CompactWindowPrefillSource: sse.CompactWindowPrefillSourceServerObserved, CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+	} {
+		ev, err := sse.NewEvent(sse.TypeRuntimeSurface, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, ev)
+	}
 	for _, ev := range events {
 		s.events <- ev
 	}
@@ -1042,6 +1070,9 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 			got.RuntimeErrors == 3 &&
 			got.RuntimeErrorByKind["llm_timeout"] == 1 &&
 			got.RuntimeErrorByKind["llm_incomplete_stream"] == 1 &&
+			got.RuntimeSurfaceRefreshByReason["post_compaction"] == 1 &&
+			got.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] == 1 &&
+			got.RuntimeSurfaceLatestRefreshReason == sse.RuntimeSurfaceRefreshCompactWindowObserved &&
 			got.ContextCompactions == 3 &&
 			got.ContextCompactionsReactive == 2 &&
 			got.ContextCompactionRemovedMessages == 96 &&
@@ -1088,6 +1119,11 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		resp.Sessions[0].Runtime.RuntimeErrors != 3 ||
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_incomplete_stream"] != 1 ||
+		resp.Sessions[0].Runtime.RuntimeSurfaceRefreshByReason["post_compaction"] != 1 ||
+		resp.Sessions[0].Runtime.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] != 1 ||
+		resp.Sessions[0].Runtime.RuntimeSurfaceLatestRefreshReason != sse.RuntimeSurfaceRefreshCompactWindowObserved ||
+		resp.Aggregate.Runtime.RuntimeSurfaceRefreshByReason["post_compaction"] != 1 ||
+		resp.Aggregate.Runtime.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] != 1 ||
 		resp.Sessions[0].Runtime.ContextCompactions != 3 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestReason != "context_overflow" ||
 		!resp.Sessions[0].Runtime.ContextCompactionLatestReactive ||
@@ -1110,6 +1146,8 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 	if summary.Runtime == nil ||
 		summary.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 2 ||
 		summary.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
+		summary.Runtime.RuntimeSurfaceRefreshByReason[sse.RuntimeSurfaceRefreshCompactWindowObserved] != 1 ||
+		summary.Runtime.RuntimeSurfaceLatestRefreshReason != sse.RuntimeSurfaceRefreshCompactWindowObserved ||
 		summary.Runtime.ContextCompactions != 3 {
 		t.Fatalf("active session runtime summary = %+v", summary.Runtime)
 	}

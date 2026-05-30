@@ -125,6 +125,8 @@ type Session struct {
 	runtimeStatsMu                      sync.Mutex
 	turnEndByReason                     map[string]int64
 	runtimeErrorByKind                  map[string]int64
+	runtimeSurfaceRefreshByReason       map[string]int64
+	runtimeSurfaceLastRefreshReason     string
 	contextCompactionLastReason         string
 	contextCompactionLastReactive       bool
 	contextCompactionLastSummaryState   string
@@ -1986,6 +1988,8 @@ type RuntimeStatsSnapshot struct {
 	TurnEndByReason                                   map[string]int64 `json:"turn_end_by_reason,omitempty"`
 	RuntimeErrors                                     int64            `json:"runtime_errors"`
 	RuntimeErrorByKind                                map[string]int64 `json:"runtime_error_by_kind,omitempty"`
+	RuntimeSurfaceRefreshByReason                     map[string]int64 `json:"runtime_surface_refresh_by_reason,omitempty"`
+	RuntimeSurfaceLatestRefreshReason                 string           `json:"runtime_surface_latest_refresh_reason,omitempty"`
 	ContextCompactions                                int64            `json:"context_compactions,omitempty"`
 	ContextCompactionsReactive                        int64            `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemovedMessages                  int64            `json:"context_compaction_removed_messages,omitempty"`
@@ -2017,6 +2021,8 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 	s.runtimeStatsMu.Lock()
 	turnEndByReason := cloneStringInt64Map(s.turnEndByReason)
 	errorByKind := cloneStringInt64Map(s.runtimeErrorByKind)
+	runtimeSurfaceRefreshByReason := cloneStringInt64Map(s.runtimeSurfaceRefreshByReason)
+	runtimeSurfaceLatestRefreshReason := s.runtimeSurfaceLastRefreshReason
 	latestReason := s.contextCompactionLastReason
 	latestReactive := s.contextCompactionLastReactive
 	latestState := s.contextCompactionLastSummaryState
@@ -2038,6 +2044,8 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 		TurnEndByReason:                                   turnEndByReason,
 		RuntimeErrors:                                     s.runtimeErrors.Load(),
 		RuntimeErrorByKind:                                errorByKind,
+		RuntimeSurfaceRefreshByReason:                     runtimeSurfaceRefreshByReason,
+		RuntimeSurfaceLatestRefreshReason:                 runtimeSurfaceLatestRefreshReason,
 		ContextCompactions:                                s.contextCompactions.Load(),
 		ContextCompactionsReactive:                        s.contextCompactionReact.Load(),
 		ContextCompactionRemovedMessages:                  s.contextCompactionRmMsg.Load(),
@@ -2127,6 +2135,7 @@ func (s *Session) observeForStats(ev sse.Event) {
 		if err := json.Unmarshal(ev.Data, &p); err != nil {
 			return
 		}
+		s.addRuntimeSurfaceRefreshReason(p.RefreshReason)
 		s.addRuntimeSurfaceCompactWindow(p)
 	}
 }
@@ -2185,6 +2194,20 @@ func (s *Session) addRuntimeError(kind string) {
 		s.runtimeErrorByKind = map[string]int64{}
 	}
 	s.runtimeErrorByKind[kind]++
+}
+
+func (s *Session) addRuntimeSurfaceRefreshReason(reason string) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return
+	}
+	s.runtimeStatsMu.Lock()
+	defer s.runtimeStatsMu.Unlock()
+	if s.runtimeSurfaceRefreshByReason == nil {
+		s.runtimeSurfaceRefreshByReason = map[string]int64{}
+	}
+	s.runtimeSurfaceRefreshByReason[reason]++
+	s.runtimeSurfaceLastRefreshReason = reason
 }
 
 func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
@@ -2279,6 +2302,15 @@ func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 			s.runtimeErrorByKind = make(map[string]int64, len(stats.RuntimeErrorByKind))
 		}
 		addStringInt64Counts(s.runtimeErrorByKind, stats.RuntimeErrorByKind)
+	}
+	if len(stats.RuntimeSurfaceRefreshByReason) > 0 {
+		if s.runtimeSurfaceRefreshByReason == nil {
+			s.runtimeSurfaceRefreshByReason = make(map[string]int64, len(stats.RuntimeSurfaceRefreshByReason))
+		}
+		addStringInt64Counts(s.runtimeSurfaceRefreshByReason, stats.RuntimeSurfaceRefreshByReason)
+	}
+	if strings.TrimSpace(stats.RuntimeSurfaceLatestRefreshReason) != "" {
+		s.runtimeSurfaceLastRefreshReason = strings.TrimSpace(stats.RuntimeSurfaceLatestRefreshReason)
 	}
 	if runtimeStatsSnapshotHasLatestCompactionState(stats) {
 		s.contextCompactionLastReason = stats.ContextCompactionLatestReason
