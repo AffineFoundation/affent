@@ -40,14 +40,24 @@ func CompactTriggerInputTokensForModelPolicy(explicit, modelContextWindowTokens,
 	if explicit != 0 || trigger <= 0 || modelContextWindowTokens <= 0 || reservedOutputTokens <= 0 {
 		return trigger
 	}
-	inputCapacity := modelContextWindowTokens - reservedOutputTokens
-	if inputCapacity < 1 {
-		inputCapacity = 1
-	}
+	inputCapacity := ModelInputCapacityTokens(modelContextWindowTokens, reservedOutputTokens)
 	if trigger > inputCapacity {
 		return inputCapacity
 	}
 	return trigger
+}
+
+// ModelInputCapacityTokens returns the request-input capacity after reserving
+// output tokens from the model's context window.
+func ModelInputCapacityTokens(modelContextWindowTokens, reservedOutputTokens int) int {
+	if modelContextWindowTokens <= 0 {
+		return 0
+	}
+	inputCapacity := modelContextWindowTokens - reservedOutputTokens
+	if inputCapacity < 1 {
+		return 1
+	}
+	return inputCapacity
 }
 
 // ClampAutoCompactTokenLimit applies Affent's effective model-window policy to
@@ -122,11 +132,12 @@ type SummaryCompactorPolicy struct {
 }
 
 type ResolvedSummaryCompactorPolicy struct {
-	TriggerMsgs        int
-	TriggerBytes       int
-	TriggerInputTokens int
-	KeepLast           int
-	MaxPromptBytes     int
+	TriggerMsgs          int
+	TriggerBytes         int
+	TriggerInputTokens   int
+	HardInputLimitTokens int
+	KeepLast             int
+	MaxPromptBytes       int
 }
 
 func ResolveSummaryCompactorPolicy(policy SummaryCompactorPolicy) ResolvedSummaryCompactorPolicy {
@@ -162,11 +173,12 @@ func ResolveSummaryCompactorPolicy(policy SummaryCompactorPolicy) ResolvedSummar
 		DefaultSummaryPromptMaxBytes,
 	)
 	return ResolvedSummaryCompactorPolicy{
-		TriggerMsgs:        triggerMsgs,
-		TriggerBytes:       triggerBytes,
-		TriggerInputTokens: triggerInputTokens,
-		KeepLast:           keepLast,
-		MaxPromptBytes:     maxSummaryPromptBytes,
+		TriggerMsgs:          triggerMsgs,
+		TriggerBytes:         triggerBytes,
+		TriggerInputTokens:   triggerInputTokens,
+		HardInputLimitTokens: ModelInputCapacityTokens(policy.ModelContextWindowTokens, policy.ReservedOutputTokens),
+		KeepLast:             keepLast,
+		MaxPromptBytes:       maxSummaryPromptBytes,
 	}
 }
 

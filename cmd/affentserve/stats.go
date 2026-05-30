@@ -86,6 +86,7 @@ type statsBoundaries struct {
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens          int    `json:"compact_trigger_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
 	CompactSummaryPromptMaxBytes       int    `json:"compact_summary_prompt_max_bytes,omitempty"`
 	PerCallTimeout                     string `json:"per_call_timeout"`
@@ -531,6 +532,7 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		ModelContextWindowEffectivePercent: cfg.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputTokens:          compactionPolicy.TriggerInputTokens,
+		CompactHardInputLimitTokens:        compactionPolicy.HardInputLimitTokens,
 		CompactTriggerInputPercent:         compactTriggerInputPercentForConfig(cfg),
 		CompactSummaryPromptMaxBytes:       compactionPolicy.MaxPromptBytes,
 		PerCallTimeout:                     perCallTimeout.String(),

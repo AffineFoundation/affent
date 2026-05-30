@@ -3869,14 +3869,10 @@ func (l *Loop) compactTriggerInputTokens() int {
 }
 
 func (l *Loop) modelInputCapacityTokens() int {
-	if l == nil || l.ModelContextWindowTokens <= 0 {
+	if l == nil {
 		return 0
 	}
-	capacity := l.ModelContextWindowTokens - l.reservedOutputTokens()
-	if capacity < 1 {
-		return 1
-	}
-	return capacity
+	return ModelInputCapacityTokens(l.ModelContextWindowTokens, l.reservedOutputTokens())
 }
 
 func (l *Loop) autoCompactWindowScopeEnabled() bool {

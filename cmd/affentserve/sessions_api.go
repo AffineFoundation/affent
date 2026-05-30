@@ -126,9 +126,12 @@ type sessionContextSummary struct {
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
 	CompactTriggerInputTokens          int    `json:"compact_trigger_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 	CompactSummaryPromptMaxBytes       int    `json:"compact_summary_prompt_max_bytes,omitempty"`
 	RequestInputCompactPercent         int    `json:"request_input_compact_percent,omitempty"`
 	RequestInputTokensUntilCompact     int    `json:"request_input_tokens_until_compact,omitempty"`
+	RequestInputHardLimitPercent       int    `json:"request_input_hard_limit_percent,omitempty"`
+	RequestInputTokensUntilHardLimit   int    `json:"request_input_tokens_until_hard_limit,omitempty"`
 }
 
 type sessionContextCompactionSummary struct {
@@ -1500,6 +1503,15 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 	if inputTrigger > 0 && estimatedRequestInputTokens > 0 {
 		inputPercent = (estimatedRequestInputTokens*100 + inputTrigger/2) / inputTrigger
 	}
+	hardInputLimit := compactionPolicy.HardInputLimitTokens
+	inputTokensUntilHardLimit := hardInputLimit - estimatedRequestInputTokens
+	if inputTokensUntilHardLimit < 0 {
+		inputTokensUntilHardLimit = 0
+	}
+	hardInputPercent := 0
+	if hardInputLimit > 0 && estimatedRequestInputTokens > 0 {
+		hardInputPercent = (estimatedRequestInputTokens*100 + hardInputLimit/2) / hardInputLimit
+	}
 	percent := messagePercent
 	if bytePercent > percent {
 		percent = bytePercent
@@ -1529,9 +1541,12 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputPercent:         compactTriggerInputPercentForConfig(cfg),
 		CompactTriggerInputTokens:          inputTrigger,
+		CompactHardInputLimitTokens:        hardInputLimit,
 		CompactSummaryPromptMaxBytes:       compactionPolicy.MaxPromptBytes,
 		RequestInputCompactPercent:         inputPercent,
 		RequestInputTokensUntilCompact:     inputTokensUntilCompact,
+		RequestInputHardLimitPercent:       hardInputPercent,
+		RequestInputTokensUntilHardLimit:   inputTokensUntilHardLimit,
 	}
 }
 

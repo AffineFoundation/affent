@@ -2,6 +2,28 @@ package agent
 
 import "testing"
 
+func TestModelInputCapacityTokens(t *testing.T) {
+	tests := []struct {
+		name                     string
+		modelContextWindowTokens int
+		reservedOutputTokens     int
+		wantHardInputLimitTokens int
+	}{
+		{name: "unknown window", wantHardInputLimitTokens: 0},
+		{name: "no reserve", modelContextWindowTokens: 100_000, wantHardInputLimitTokens: 100_000},
+		{name: "reserves output", modelContextWindowTokens: 100_000, reservedOutputTokens: 30_000, wantHardInputLimitTokens: 70_000},
+		{name: "reserve cannot erase input capacity", modelContextWindowTokens: 1_000, reservedOutputTokens: 2_000, wantHardInputLimitTokens: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ModelInputCapacityTokens(tt.modelContextWindowTokens, tt.reservedOutputTokens)
+			if got != tt.wantHardInputLimitTokens {
+				t.Fatalf("ModelInputCapacityTokens(%d, %d) = %d, want %d", tt.modelContextWindowTokens, tt.reservedOutputTokens, got, tt.wantHardInputLimitTokens)
+			}
+		})
+	}
+}
+
 func TestNewLLMSummaryCompactorForPolicyUsesDefaults(t *testing.T) {
 	got := NewLLMSummaryCompactorForPolicy(SummaryCompactorPolicy{})
 	if got.TriggerMsgs != DefaultSummaryTriggerMsgs ||
@@ -32,6 +54,7 @@ func TestNewLLMSummaryCompactorForPolicyAlignsWithModelWindow(t *testing.T) {
 	}
 	resolved := ResolveSummaryCompactorPolicy(policy)
 	if resolved.TriggerInputTokens != 70_000 ||
+		resolved.HardInputLimitTokens != 70_000 ||
 		resolved.TriggerBytes != got.TriggerBytes ||
 		resolved.MaxPromptBytes != got.MaxPromptBytes {
 		t.Fatalf("resolved policy = %+v, compactor = %+v", resolved, got)
