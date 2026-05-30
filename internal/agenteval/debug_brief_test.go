@@ -1540,7 +1540,7 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 	})
 	item = debugBriefItemByKind(brief, "context_compaction")
 	if item == nil ||
-		item.Message != "context compaction left estimated request input above the trigger; inspect tool-schema pressure and summary size before raising token limits" ||
+		item.Message != "context compaction left effective request input above the trigger; inspect scoped pressure, tool-schema pressure, and summary size before raising token limits" ||
 		item.Counts["post_policy_observed"] != 1 ||
 		item.Counts["post_policy_still_over_trigger"] != 1 ||
 		item.Counts["max_post_policy_pressure_percent"] != 112 ||

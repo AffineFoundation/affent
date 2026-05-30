@@ -2117,13 +2117,23 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 				stats.MaxPolicyPressurePercent = pressure
 			}
 		}
-		if compaction.AfterEstimatedInputTokens > 0 && compaction.TriggerInputTokens > 0 {
+		if contextCompactionPostPolicyObserved(compaction.AfterEstimatedInputTokens, compaction.TriggerInputTokens, compaction.CompactScopeActive) {
 			stats.PostPolicyObserved++
-			pressure := contextCompactionPolicyPressurePercent(compaction.AfterEstimatedInputTokens, compaction.TriggerInputTokens)
+			pressure := contextCompactionPostPolicyPressurePercent(
+				compaction.AfterEstimatedInputTokens,
+				compaction.TriggerInputTokens,
+				compaction.CompactScopeActive,
+				compaction.CompactScopedInputTokens,
+			)
 			if pressure > stats.MaxPostPolicyPressurePercent {
 				stats.MaxPostPolicyPressurePercent = pressure
 			}
-			if compaction.AfterEstimatedInputTokens >= compaction.TriggerInputTokens {
+			if contextCompactionPostPolicyOverTrigger(
+				compaction.AfterEstimatedInputTokens,
+				compaction.TriggerInputTokens,
+				compaction.CompactScopeActive,
+				compaction.CompactScopedInputTokens,
+			) {
 				stats.PostPolicyStillOverTrigger++
 			}
 		}
@@ -2207,13 +2217,23 @@ func (t Trace) ContextCompactionSkipStats(maxExamples int) ContextCompactionSkip
 				stats.MaxPolicyPressurePercent = pressure
 			}
 		}
-		if skipped.AfterEstimatedInputTokens > 0 && skipped.TriggerInputTokens > 0 {
+		if contextCompactionPostPolicyObserved(skipped.AfterEstimatedInputTokens, skipped.TriggerInputTokens, skipped.CompactScopeActive) {
 			stats.PostPolicyObserved++
-			pressure := contextCompactionPolicyPressurePercent(skipped.AfterEstimatedInputTokens, skipped.TriggerInputTokens)
+			pressure := contextCompactionPostPolicyPressurePercent(
+				skipped.AfterEstimatedInputTokens,
+				skipped.TriggerInputTokens,
+				skipped.CompactScopeActive,
+				skipped.CompactScopedInputTokens,
+			)
 			if pressure > stats.MaxPostPolicyPressurePercent {
 				stats.MaxPostPolicyPressurePercent = pressure
 			}
-			if skipped.AfterEstimatedInputTokens >= skipped.TriggerInputTokens {
+			if contextCompactionPostPolicyOverTrigger(
+				skipped.AfterEstimatedInputTokens,
+				skipped.TriggerInputTokens,
+				skipped.CompactScopeActive,
+				skipped.CompactScopedInputTokens,
+			) {
 				stats.PostPolicyStillOverTrigger++
 			}
 		}
@@ -2242,6 +2262,33 @@ func contextCompactionPolicyPressurePercent(estimatedInputTokens, triggerInputTo
 		return 0
 	}
 	return (estimatedInputTokens*100 + triggerInputTokens - 1) / triggerInputTokens
+}
+
+func contextCompactionPostPolicyObserved(afterEstimatedInputTokens, triggerInputTokens int, compactScopeActive bool) bool {
+	if triggerInputTokens <= 0 {
+		return false
+	}
+	if compactScopeActive {
+		return true
+	}
+	return afterEstimatedInputTokens > 0
+}
+
+func contextCompactionPostPolicyPressurePercent(afterEstimatedInputTokens, triggerInputTokens int, compactScopeActive bool, compactScopedInputTokens int) int {
+	if compactScopeActive {
+		return contextCompactionPolicyPressurePercent(compactScopedInputTokens, triggerInputTokens)
+	}
+	return contextCompactionPolicyPressurePercent(afterEstimatedInputTokens, triggerInputTokens)
+}
+
+func contextCompactionPostPolicyOverTrigger(afterEstimatedInputTokens, triggerInputTokens int, compactScopeActive bool, compactScopedInputTokens int) bool {
+	if triggerInputTokens <= 0 {
+		return false
+	}
+	if compactScopeActive {
+		return compactScopedInputTokens >= triggerInputTokens
+	}
+	return afterEstimatedInputTokens >= triggerInputTokens
 }
 
 func contextCompactionSummaryMissing(compaction ContextCompaction) bool {

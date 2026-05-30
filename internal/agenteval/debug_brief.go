@@ -562,7 +562,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		if res.ContextCompactions.PostPolicyStillOverTrigger > 0 {
 			tags = append(tags, "context_compaction:post_pressure")
-			message = "context compaction left estimated request input above the trigger; inspect tool-schema pressure and summary size before raising token limits"
+			message = "context compaction left effective request input above the trigger; inspect scoped pressure, tool-schema pressure, and summary size before raising token limits"
 		}
 		if res.ContextCompactions.MaxCompactScopedPressure > 0 {
 			tags = append(tags, "context_compaction:scoped_pressure")
