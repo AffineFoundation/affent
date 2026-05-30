@@ -2270,6 +2270,78 @@ func TestRunTurnPublishesRuntimeSurfaceWhenCompactWindowUsageObserved(t *testing
 	}
 }
 
+type noToolPostCompactionCompactor struct{}
+
+func (noToolPostCompactionCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
+	if len(msgs) < 3 {
+		return msgs, nil
+	}
+	return []ChatMessage{
+		msgs[0],
+		{Role: "user", Content: summaryPrefix + "compacted no-tool request"},
+		msgs[len(msgs)-1],
+	}, nil
+}
+
+func TestPrepareToolDefsForRequestPublishesPostCompactionWithoutTools(t *testing.T) {
+	events := make(chan sse.Event, 4)
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "base"},
+		{Role: "user", Content: strings.Repeat("old context ", 300)},
+		{Role: "assistant", Content: "ack"},
+		{Role: "user", Content: strings.Repeat("new context ", 300)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		Conv:                       conv,
+		Events:                     events,
+		Compactor:                  noToolPostCompactionCompactor{},
+		CompactTriggerInputTokens:  1,
+		ModelContextWindowTokens:   6_000,
+		CompactTriggerInputPercent: 80,
+	}
+
+	got := loop.prepareToolDefsForRequest(context.Background(), "turn_no_tools", nil, TurnOptions{})
+	if got != nil {
+		t.Fatalf("tool defs = %+v, want nil for no-tool request", got)
+	}
+
+	var compacted bool
+	var postCompaction *sse.RuntimeSurfacePayload
+	for len(events) > 0 {
+		ev := <-events
+		switch ev.Type {
+		case sse.TypeContextCompact:
+			compacted = true
+		case sse.TypeRuntimeSurface:
+			var payload sse.RuntimeSurfacePayload
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				t.Fatalf("decode runtime surface: %v", err)
+			}
+			if payload.RefreshReason == "post_compaction" {
+				postCompaction = &payload
+			}
+		}
+	}
+	if !compacted {
+		t.Fatal("missing context.compacted event")
+	}
+	if postCompaction == nil {
+		t.Fatal("missing post_compaction runtime surface for no-tool request")
+	}
+	if postCompaction.ToolCount != 0 ||
+		postCompaction.CompactTriggerInputTokens != 1 ||
+		postCompaction.CompactHardInputLimitTokens != 6_000 ||
+		postCompaction.EstimatedRequestInputTokens <= 0 {
+		t.Fatalf("post-compaction surface = %+v", *postCompaction)
+	}
+}
+
 func TestRestoreAutoCompactWindowStateSurfacesObservedScope(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))

@@ -3669,6 +3669,9 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 func (l *Loop) prepareToolDefsForRequest(ctx context.Context, turnID string, toolDefs []ToolDef, opts TurnOptions) []ToolDef {
 	compacted := l.compactBeforeRequest(ctx, turnID, toolDefs)
 	if toolDefs == nil {
+		if compacted {
+			l.publishRuntimeSurfaceWithReason(turnID, opts, "post_compaction")
+		}
 		return nil
 	}
 	refreshed := l.toolDefs(opts)
