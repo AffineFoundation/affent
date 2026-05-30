@@ -39,6 +39,9 @@ func TestHandleAccountSkills_ListsAndReadsSkillBodies(t *testing.T) {
 	if found.Name == "" || found.Description == "" || found.BodyPreview == "" || found.Body != "" {
 		t.Fatalf("catalog entry should expose metadata and preview only: %+v", found)
 	}
+	if !found.AutoActivates {
+		t.Fatalf("catalog entry should expose built-in skill as auto-activating: %+v", found)
+	}
 
 	r = httptest.NewRequest(http.MethodGet, "/v1/skills/coding_repair_workflow", nil)
 	w = httptest.NewRecorder()
@@ -82,6 +85,9 @@ func TestHandleAccountSkills_InstalledSkillActivatesForActiveAndNewSessions(t *t
 	if detail.SessionID != "account" || detail.Skill.Name != "account_demo" || !detail.Skill.Runtime || !strings.Contains(detail.Skill.Body, "account workflow") {
 		t.Fatalf("install response = %+v", detail.Skill)
 	}
+	if !detail.Skill.AutoActivates {
+		t.Fatalf("install response should expose skill as auto-activating: %+v", detail.Skill)
+	}
 	if active.skillRegistry == nil {
 		t.Fatal("active session skill registry missing")
 	}
@@ -112,6 +118,9 @@ func TestHandleAccountSkills_InstalledSkillActivatesForActiveAndNewSessions(t *t
 	if detail.Skill.Name != "account_demo" || !strings.Contains(detail.Skill.Body, "account workflow") {
 		t.Fatalf("account read response = %+v", detail.Skill)
 	}
+	if !detail.Skill.AutoActivates {
+		t.Fatalf("account read response should preserve auto activation state: %+v", detail.Skill)
+	}
 
 	r = httptest.NewRequest(http.MethodDelete, "/v1/skills/account_demo", nil)
 	w = httptest.NewRecorder()
@@ -135,6 +144,56 @@ func TestHandleAccountSkills_InstalledSkillActivatesForActiveAndNewSessions(t *t
 	if got := w.Result().StatusCode; got != http.StatusNotFound {
 		t.Fatalf("read deleted status = %d, want 404; body=%s", got, w.Body.String())
 	}
+}
+
+func TestHandleAccountSkills_ManualSkillDoesNotAutoActivate(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	active, err := pool.GetOrCreate("skills-manual-active")
+	if err != nil {
+		t.Fatalf("GetOrCreate active: %v", err)
+	}
+	body := map[string]any{
+		"name":        "manual_demo",
+		"description": "Manual workflow.",
+		"body":        "AFFENT ACTIVE SKILL: manual_demo\nUse this manual workflow only when explicitly read.",
+	}
+	raw, _ := json.Marshal(body)
+	r := httptest.NewRequest(http.MethodPost, "/v1/skills", bytes.NewReader(raw))
+	w := httptest.NewRecorder()
+	handleAccountSkills(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	var detail sessionSkillResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode install: %v body=%s", err, w.Body.String())
+	}
+	if detail.SessionID != "account" || detail.Skill.Name != "manual_demo" || !detail.Skill.Runtime || detail.Skill.AutoActivates {
+		t.Fatalf("manual install response = %+v, want runtime non-auto-activating skill", detail.Skill)
+	}
+	if got := active.skillRegistry.Provide("please use manual demo"); got != "" {
+		t.Fatalf("manual skill should not auto-activate in active session, got %q", got)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/skills", nil)
+	w = httptest.NewRecorder()
+	handleAccountSkills(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("list status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var list sessionSkillsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v body=%s", err, w.Body.String())
+	}
+	for _, skill := range list.Skills {
+		if skill.Name == "manual_demo" {
+			if skill.AutoActivates {
+				t.Fatalf("manual list entry should not auto-activate: %+v", skill)
+			}
+			return
+		}
+	}
+	t.Fatalf("manual skill missing from list: %+v", list.Skills)
 }
 
 func TestHandleAccountSkills_RejectsDeletingBuiltInSkill(t *testing.T) {

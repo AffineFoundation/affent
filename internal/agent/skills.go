@@ -101,7 +101,7 @@ func (s Skill) activates(lowerUserText string) bool {
 	return false
 }
 
-func (s Skill) hasActivationRules() bool {
+func (s Skill) HasActivationRules() bool {
 	if s.Match != nil || s.AutoActivation.hasRules() {
 		return true
 	}
@@ -171,6 +171,7 @@ type SkillCatalogEntry struct {
 	RequiredTools  []string             `json:"required_tools,omitempty"`
 	Triggers       []string             `json:"triggers,omitempty"`
 	AutoActivation *SkillAutoActivation `json:"auto_activation,omitempty"`
+	AutoActivates  bool                 `json:"auto_activates"`
 }
 
 // Register appends a skill. Operators wiring a custom registry call
@@ -260,6 +261,7 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 			Description:   s.Description,
 			Source:        s.Source,
 			RequiredTools: append([]string(nil), s.RequiredTools...),
+			AutoActivates: s.HasActivationRules(),
 		}
 		if len(s.Triggers) > 0 {
 			entry.Triggers = append([]string(nil), s.Triggers...)

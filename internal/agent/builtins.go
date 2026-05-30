@@ -515,7 +515,7 @@ func skillRequiredToolsSummary(requiredTools []string) string {
 }
 
 func skillActiveNow(installed Skill, runtimeTools *Registry) bool {
-	if !installed.hasActivationRules() {
+	if !installed.HasActivationRules() {
 		return false
 	}
 	if len(installed.RequiredTools) == 0 {

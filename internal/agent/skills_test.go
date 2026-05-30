@@ -732,6 +732,9 @@ func TestSkillRegistry_CustomSkillExtensionPoint(t *testing.T) {
 		if len(catalog) != 1 || catalog[0].Name != "test_skill" || catalog[0].Description != "test description" || catalog[0].Source != "test://skill" {
 			t.Fatalf("Catalog() = %+v", catalog)
 		}
+		if !catalog[0].AutoActivates {
+			t.Fatalf("Catalog AutoActivates = false, want true")
+		}
 		if len(catalog[0].Triggers) != 1 || catalog[0].Triggers[0] != "sentinel-trigger-xyz" {
 			t.Fatalf("Catalog triggers = %+v, want sentinel trigger", catalog[0].Triggers)
 		}
@@ -745,6 +748,38 @@ func TestSkillRegistry_CustomSkillExtensionPoint(t *testing.T) {
 			t.Fatal("Lookup(missing) should fail")
 		}
 	})
+}
+
+func TestSkillRegistry_CatalogAutoActivatesOnlyWithActivationRules(t *testing.T) {
+	reg := &SkillRegistry{}
+	reg.Register(Skill{
+		Name: "manual_skill",
+		Body: "AFFENT ACTIVE SKILL: manual_skill\nmanual body",
+	})
+	reg.Register(Skill{
+		Name:           "auto_skill",
+		Body:           "AFFENT ACTIVE SKILL: auto_skill\nauto body",
+		AutoActivation: SkillAutoActivation{Any: []string{"auto trigger"}},
+	})
+
+	catalog := reg.Catalog()
+	if len(catalog) != 2 {
+		t.Fatalf("Catalog() len = %d, want 2: %+v", len(catalog), catalog)
+	}
+	if catalog[0].Name != "manual_skill" || catalog[0].AutoActivates {
+		t.Fatalf("manual catalog entry = %+v, want non-auto-activating", catalog[0])
+	}
+	if catalog[1].Name != "auto_skill" || !catalog[1].AutoActivates {
+		t.Fatalf("auto catalog entry = %+v, want auto-activating", catalog[1])
+	}
+	manual, ok := reg.Lookup("manual_skill")
+	if !ok || manual.HasActivationRules() {
+		t.Fatalf("manual HasActivationRules = %v, found=%v", manual.HasActivationRules(), ok)
+	}
+	auto, ok := reg.Lookup("auto_skill")
+	if !ok || !auto.HasActivationRules() {
+		t.Fatalf("auto HasActivationRules = %v, found=%v", auto.HasActivationRules(), ok)
+	}
 }
 
 // TestSkillRegistry_CustomMatchPredicate pins the Match override
