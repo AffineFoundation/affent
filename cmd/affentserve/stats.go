@@ -371,7 +371,7 @@ func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now
 	if latestError != nil {
 		stats.LastErrorSessionID = latestErrorSessionID
 		stats.LastErrorScheduleID = latestError.ID
-		stats.LastErrorKind = sessionScheduleLastErrorKind(latestError.LastError)
+		stats.LastErrorKind = sessionScheduleErrorKind(*latestError)
 		stats.LastError = latestError.LastError
 	}
 }

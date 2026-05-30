@@ -126,6 +126,10 @@ func TestSessionScheduleToolResumeLoopTickRequiresRunningProtocol(t *testing.T) 
 	if !strings.Contains(out, `"enabled": true`) || !strings.Contains(out, `"kind": "loop_tick"`) {
 		t.Fatalf("resume output missing enabled loop_tick:\n%s", out)
 	}
+	file, found, readErr = readSessionSchedulesFile(sessionSchedulesPath(pool, "loop-tick-resume"))
+	if readErr != nil || !found || len(file.Schedules) != 1 || file.Schedules[0].LastError != "" || file.Schedules[0].LastErrorKind != "" {
+		t.Fatalf("schedule after accepted resume found=%v err=%v schedules=%+v, want error state cleared", found, readErr, file.Schedules)
+	}
 }
 
 func TestSessionScheduleToolCreatedTimerIsVisibleThroughSessionAPI(t *testing.T) {

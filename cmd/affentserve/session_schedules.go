@@ -42,6 +42,7 @@ const (
 	sessionScheduleKindLoopTick     = "loop_tick"
 
 	sessionScheduleLoopTickUnavailableFailureKind = "session_schedule_loop_tick_unavailable"
+	sessionScheduleTurnFailedFailureKind          = "session_schedule_turn_failed"
 )
 
 type sessionSchedule struct {
@@ -57,6 +58,7 @@ type sessionSchedule struct {
 	LastRunAt             string `json:"last_run_at,omitempty"`
 	LastTurnID            string `json:"last_turn_id,omitempty"`
 	RunCount              int    `json:"run_count,omitempty"`
+	LastErrorKind         string `json:"last_error_kind,omitempty"`
 	LastError             string `json:"last_error,omitempty"`
 }
 
@@ -190,6 +192,7 @@ func handleSessionScheduleUpdate(pool *SessionPool, sessionID, scheduleID string
 		file.Schedules[i].Enabled = *req.Enabled
 		file.Schedules[i].UpdatedAt = now
 		file.Schedules[i].LastError = ""
+		file.Schedules[i].LastErrorKind = ""
 		updated = true
 		break
 	}
@@ -605,7 +608,7 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 	if latestError != nil {
 		summary.LastErrorScheduleID = latestError.ID
 		summary.LastErrorScheduleKind = latestError.Kind
-		summary.LastErrorKind = sessionScheduleLastErrorKind(latestError.LastError)
+		summary.LastErrorKind = sessionScheduleErrorKind(*latestError)
 		summary.LastError = latestError.LastError
 	}
 	return summary
@@ -613,6 +616,13 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 
 func sessionScheduleLastErrorKind(lastError string) string {
 	return toolfailure.Kind(lastError)
+}
+
+func sessionScheduleErrorKind(schedule sessionSchedule) string {
+	if kind := strings.TrimSpace(schedule.LastErrorKind); kind != "" {
+		return kind
+	}
+	return sessionScheduleLastErrorKind(schedule.LastError)
 }
 
 func sortedSessionSchedules(schedules []sessionSchedule) []sessionSchedule {
@@ -674,6 +684,12 @@ func normalizeSessionSchedule(schedule *sessionSchedule) error {
 	}
 	if schedule.RepeatIntervalSeconds > 0 && time.Duration(schedule.RepeatIntervalSeconds)*time.Second < minSessionScheduleRepeat {
 		return fmt.Errorf("repeat_interval_seconds must be at least %d", int(minSessionScheduleRepeat.Seconds()))
+	}
+	if strings.TrimSpace(schedule.LastError) == "" {
+		schedule.LastError = ""
+		schedule.LastErrorKind = ""
+	} else if strings.TrimSpace(schedule.LastErrorKind) == "" {
+		schedule.LastErrorKind = sessionScheduleLastErrorKind(schedule.LastError)
 	}
 	return nil
 }
@@ -881,6 +897,7 @@ func markSessionScheduleLoopTickUnavailable(schedule *sessionSchedule, now time.
 	}
 	schedule.Enabled = false
 	schedule.LastError = sessionScheduleLoopTickUnavailableMessage()
+	schedule.LastErrorKind = sessionScheduleLoopTickUnavailableFailureKind
 	schedule.UpdatedAt = now.UTC().Format(time.RFC3339)
 }
 
@@ -1044,6 +1061,7 @@ func (p *SessionPool) recordSessionScheduleSuccess(run sessionScheduleRun, now t
 		schedule.LastRunAt = nowStr
 		schedule.LastTurnID = turnID
 		schedule.LastError = ""
+		schedule.LastErrorKind = ""
 		schedule.RunCount++
 		schedule.UpdatedAt = nowStr
 		return writeSessionSchedulesFile(path, file)
@@ -1137,10 +1155,20 @@ func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now t
 			schedule.LastTurnID = strings.TrimSpace(turnID)
 		}
 		schedule.LastError = previewSessionScheduleError(cause)
+		schedule.LastErrorKind = sessionScheduleFailureKind(cause)
 		schedule.UpdatedAt = nowStr
 		return writeSessionSchedulesFile(path, file)
 	}
 	return nil
+}
+
+func sessionScheduleFailureKind(cause error) string {
+	if cause != nil {
+		if kind := sessionScheduleLastErrorKind(cause.Error()); kind != "" {
+			return kind
+		}
+	}
+	return sessionScheduleTurnFailedFailureKind
 }
 
 func sessionScheduleDue(schedule sessionSchedule, now time.Time) bool {

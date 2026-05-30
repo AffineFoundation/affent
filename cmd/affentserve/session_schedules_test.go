@@ -46,7 +46,10 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	if !schedule.Enabled {
 		t.Fatalf("schedule = %+v, want failed one-shot re-enabled for retry", schedule)
 	}
-	if schedule.RunCount != 0 || schedule.LastTurnID == "" || !strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) {
+	if schedule.RunCount != 0 ||
+		schedule.LastTurnID == "" ||
+		schedule.LastErrorKind != sessionScheduleTurnFailedFailureKind ||
+		!strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) {
 		t.Fatalf("schedule = %+v, want failed turn id and turn-end failure metadata instead of false success", schedule)
 	}
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
@@ -395,6 +398,7 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickWhenRuntimeDisabled
 	if schedule.Enabled ||
 		schedule.RunCount != 0 ||
 		schedule.LastTurnID != "" ||
+		schedule.LastErrorKind != sessionScheduleLoopTickUnavailableFailureKind ||
 		!strings.Contains(schedule.LastError, "loop protocol runtime support") ||
 		!strings.Contains(schedule.LastError, "Next:") ||
 		!strings.Contains(schedule.LastError, "Failure: kind="+sessionScheduleLoopTickUnavailableFailureKind) {

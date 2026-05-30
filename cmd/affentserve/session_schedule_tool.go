@@ -221,6 +221,7 @@ func sessionScheduleToolUpdate(pool *SessionPool, sessionID string, p sessionSch
 		file.Schedules[i].Enabled = *p.Enabled
 		file.Schedules[i].UpdatedAt = now
 		file.Schedules[i].LastError = ""
+		file.Schedules[i].LastErrorKind = ""
 		updated = true
 		break
 	}
