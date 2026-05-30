@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 const (
@@ -49,14 +50,33 @@ func registerSessionScheduleTool(r *agent.Registry, pool *SessionPool, sessionID
 		}
 	}`)
 	r.Add(&agent.Tool{
-		Name:         sessionScheduleToolName,
-		Description:  "Create, list, pause/resume, or delete session scheduled turns. This is the correct runtime tool for timers, reminders, recurring checks, and future follow-ups. It writes schedules.json and does not create or require LOOP.md; use loop_protocol only for durable long-running task state.",
-		Schema:       schema,
-		CatalogGroup: "Core",
+		Name:                  sessionScheduleToolName,
+		Description:           "Create, list, pause/resume, or delete session scheduled turns. This is the correct runtime tool for timers, reminders, recurring checks, and future follow-ups. It writes schedules.json and does not create or require LOOP.md; use loop_protocol only for durable long-running task state.",
+		Schema:                schema,
+		RuntimeSurfaceRefresh: sessionScheduleRuntimeSurfaceRefresh,
+		CatalogGroup:          "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			return executeSessionScheduleTool(ctx, pool, sessionID, args)
 		},
 	})
+}
+
+func sessionScheduleRuntimeSurfaceRefresh(args json.RawMessage, _ string, isErr bool) string {
+	if isErr {
+		return ""
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return ""
+	}
+	switch strings.TrimSpace(req.Action) {
+	case "create", "update", "delete":
+		return sse.RuntimeSurfaceRefreshSchedulesChanged
+	default:
+		return ""
+	}
 }
 
 func executeSessionScheduleTool(ctx context.Context, pool *SessionPool, sessionID string, args json.RawMessage) (string, error) {

@@ -59,6 +59,28 @@ func TestSessionScheduleToolCreatesRecurringTimerWithoutLoopProtocol(t *testing.
 	}
 }
 
+func TestSessionScheduleToolDeclaresRuntimeSurfaceRefresh(t *testing.T) {
+	cases := []struct {
+		name  string
+		args  json.RawMessage
+		isErr bool
+		want  string
+	}{
+		{name: "create", args: json.RawMessage(`{"action":"create"}`), want: sse.RuntimeSurfaceRefreshSchedulesChanged},
+		{name: "update", args: json.RawMessage(`{"action":"update"}`), want: sse.RuntimeSurfaceRefreshSchedulesChanged},
+		{name: "delete", args: json.RawMessage(`{"action":"delete"}`), want: sse.RuntimeSurfaceRefreshSchedulesChanged},
+		{name: "list", args: json.RawMessage(`{"action":"list"}`)},
+		{name: "error", args: json.RawMessage(`{"action":"create"}`), isErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sessionScheduleRuntimeSurfaceRefresh(tc.args, `{}`, tc.isErr); got != tc.want {
+				t.Fatalf("refresh = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSessionScheduleToolLoopTickRequiresRunningProtocol(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	reg := agent.NewRegistry()
@@ -263,6 +285,8 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 	deadline := time.After(10 * time.Second)
 	sawScheduleInSurface := false
 	sawScheduleTool := false
+	sawScheduleResult := false
+	sawScheduleSurfaceRefresh := false
 	sawLoopTool := false
 	var finalText string
 	for {
@@ -273,6 +297,12 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 				var p sse.RuntimeSurfacePayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatalf("decode runtime.surface: %v", err)
+				}
+				if p.RefreshReason == sse.RuntimeSurfaceRefreshSchedulesChanged {
+					if !sawScheduleResult {
+						t.Fatal("schedule runtime surface refreshed before schedule tool result was visible")
+					}
+					sawScheduleSurfaceRefresh = true
 				}
 				for _, tool := range p.Tools {
 					if tool.Name == sessionScheduleToolName {
@@ -292,6 +322,17 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 					sawScheduleTool = true
 				case agent.LoopProtocolToolName:
 					sawLoopTool = true
+				}
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.CallID == "schedule_btc" {
+					if !strings.Contains(p.Result, `"next_run_at": "`+nextRunAt+`"`) || !strings.Contains(p.Result, `"repeat_interval_seconds": 1800`) {
+						t.Fatalf("schedule result missing durable timer details:\n%s", p.Result)
+					}
+					sawScheduleResult = true
 				}
 			case sse.TypeMessageDone:
 				var p sse.MessageDonePayload
@@ -315,6 +356,9 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 				}
 				if !sawScheduleTool {
 					t.Fatal("turn ended without session_schedule tool call")
+				}
+				if !sawScheduleResult || !sawScheduleSurfaceRefresh {
+					t.Fatalf("schedule sync evidence missing: result=%v surface_refresh=%v", sawScheduleResult, sawScheduleSurfaceRefresh)
 				}
 				if sawLoopTool {
 					t.Fatal("recurring timer setup used loop_protocol")
